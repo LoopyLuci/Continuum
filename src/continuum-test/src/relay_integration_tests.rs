@@ -105,10 +105,7 @@ fn test_intent_message_text_roundtrip() {
 #[test]
 fn test_clipboard_content_type_roundtrip() {
     use continuum_transport::types::ClipboardContentType;
-    let types = vec![
-        ClipboardContentType::Text,
-        ClipboardContentType::Image,
-    ];
+    let types = vec![ClipboardContentType::Text, ClipboardContentType::Image];
     for ct in types {
         let json = serde_json::to_string(&ct).unwrap();
         let decoded: ClipboardContentType = serde_json::from_str(&json).unwrap();

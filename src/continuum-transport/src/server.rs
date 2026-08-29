@@ -164,8 +164,7 @@ impl InlineAnomalyDetector {
         }
 
         let mean = data.iter().sum::<f64>() / data.len() as f64;
-        let variance =
-            data.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / data.len() as f64;
+        let variance = data.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / data.len() as f64;
         let std_dev = variance.sqrt();
 
         if std_dev < 1e-10 {
@@ -232,8 +231,7 @@ impl InlineAnomalyDetector {
         }
 
         let mean = data.iter().sum::<f64>() / data.len() as f64;
-        let variance =
-            data.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / data.len() as f64;
+        let variance = data.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / data.len() as f64;
         let std_dev = variance.sqrt();
 
         if std_dev < 1e-10 {
@@ -879,8 +877,12 @@ async fn handle_bi_stream(
         ApqStreamType::Intent => handle_intent_stream(&mut send, &mut recv, state, addr).await,
         ApqStreamType::Audio => handle_audio_stream(&mut send, state, addr).await,
         ApqStreamType::Debug => handle_debug_stream(&mut send, &mut recv, state, addr).await,
-        ApqStreamType::Clipboard => handle_clipboard_stream(&mut send, &mut recv, state, addr).await,
-        ApqStreamType::FileTransfer => handle_file_transfer_stream(&mut send, &mut recv, state, addr).await,
+        ApqStreamType::Clipboard => {
+            handle_clipboard_stream(&mut send, &mut recv, state, addr).await
+        }
+        ApqStreamType::FileTransfer => {
+            handle_file_transfer_stream(&mut send, &mut recv, state, addr).await
+        }
     }
 }
 
@@ -948,8 +950,14 @@ async fn handle_media_stream(
                                 packet_loss: 0.0,
                             });
 
-                            state.anomaly_detector.lock().record_encode_time(encode_time as f64);
-                            state.anomaly_detector.lock().record_frame_size(frame.data.len() as f64);
+                            state
+                                .anomaly_detector
+                                .lock()
+                                .record_encode_time(encode_time as f64);
+                            state
+                                .anomaly_detector
+                                .lock()
+                                .record_frame_size(frame.data.len() as f64);
 
                             (
                                 frame.data,
@@ -1131,10 +1139,13 @@ async fn handle_debug_stream(
 
     tracing::info!(addr = %addr, "Debug tunnel established");
 
-    let (to_client_tx, mut to_client_rx) = tokio::sync::mpsc::channel::<crate::debug_tunnel::CdpTunnelMessage>(256);
-    let (from_client_tx, from_client_rx) = tokio::sync::mpsc::channel::<crate::debug_tunnel::CdpTunnelMessage>(256);
+    let (to_client_tx, mut to_client_rx) =
+        tokio::sync::mpsc::channel::<crate::debug_tunnel::CdpTunnelMessage>(256);
+    let (from_client_tx, from_client_rx) =
+        tokio::sync::mpsc::channel::<crate::debug_tunnel::CdpTunnelMessage>(256);
 
-    let mut tunnel = crate::debug_tunnel::DebugTunnelServer::new(to_client_tx.clone(), from_client_rx);
+    let mut tunnel =
+        crate::debug_tunnel::DebugTunnelServer::new(to_client_tx.clone(), from_client_rx);
 
     // Try to discover WebView2
     match tunnel.discover_webview2().await {

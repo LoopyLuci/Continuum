@@ -54,13 +54,24 @@ pub struct ServerArgs {
     #[arg(long, short)]
     pub verbose: bool,
 
-    #[arg(long, help = "Enable remote WebView2 debugging (requires WebView2 with --remote-debugging-port)")]
+    #[arg(
+        long,
+        help = "Enable remote WebView2 debugging (requires WebView2 with --remote-debugging-port)"
+    )]
     pub remote_debug: bool,
 
-    #[arg(long, default_value = "auto", help = "Encoder: auto, cpu, nvenc, amf, vaapi, videotoolbox")]
+    #[arg(
+        long,
+        default_value = "auto",
+        help = "Encoder: auto, cpu, nvenc, amf, vaapi, videotoolbox"
+    )]
     pub encoder: String,
 
-    #[arg(long, default_value_t = false, help = "Require PAKE pairing; disable legacy plaintext pairing code")]
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "Require PAKE pairing; disable legacy plaintext pairing code"
+    )]
     pub require_pake: bool,
 }
 
@@ -174,7 +185,7 @@ impl Default for ServerConfig {
             remote_debug: false,
             encoder: default_encoder(),
             require_pake: default_require_pake(),
-            }
+        }
     }
 }
 

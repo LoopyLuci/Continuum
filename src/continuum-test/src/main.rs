@@ -7,9 +7,9 @@ mod instrument;
 mod integration_tests;
 mod packaging;
 mod relay_integration_tests;
-mod resilience_tests;
 mod replay;
 mod reporter;
+mod resilience_tests;
 mod two_instance_test;
 mod types;
 

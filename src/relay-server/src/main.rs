@@ -16,7 +16,11 @@ struct RelayArgs {
     #[arg(long, help = "Log level")]
     log_level: Option<String>,
 
-    #[arg(long, default_value = "continuum-relay", help = "Shared relay secret for authentication")]
+    #[arg(
+        long,
+        default_value = "continuum-relay",
+        help = "Shared relay secret for authentication"
+    )]
     secret: String,
 }
 
@@ -99,7 +103,8 @@ async fn main() -> Result<()> {
         "relay.continuum.local".into(),
     ])?;
     let key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
-    let cert_der: rustls::pki_types::CertificateDer<'static> = cert.cert.der().as_ref().to_vec().into();
+    let cert_der: rustls::pki_types::CertificateDer<'static> =
+        cert.cert.der().as_ref().to_vec().into();
 
     let mut rustls_config = rustls::ServerConfig::builder()
         .with_no_client_auth()
@@ -194,7 +199,10 @@ async fn handle_relay_stream(
 
     match msg_type {
         "register" => {
-            let session_id = message.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
+            let session_id = message
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let secret = message.get("secret").and_then(|v| v.as_str()).unwrap_or("");
             if secret != state.secret {
                 send_error(&mut send, "Invalid relay secret").await?;
@@ -207,12 +215,16 @@ async fn handle_relay_stream(
 
             state.register_session(session_id.into(), conn).await?;
             let response = b"{\"type\":\"register_ack\"}";
-            send.write_all(&(response.len() as u32).to_be_bytes()).await?;
+            send.write_all(&(response.len() as u32).to_be_bytes())
+                .await?;
             send.write_all(response).await?;
             let _ = send.finish();
         }
         "connect" => {
-            let session_id = message.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
+            let session_id = message
+                .get("session_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let secret = message.get("secret").and_then(|v| v.as_str()).unwrap_or("");
             if secret != state.secret {
                 send_error(&mut send, "Invalid relay secret").await?;
@@ -229,7 +241,8 @@ async fn handle_relay_stream(
             };
 
             let response = b"{\"type\":\"connect_ack\"}";
-            send.write_all(&(response.len() as u32).to_be_bytes()).await?;
+            send.write_all(&(response.len() as u32).to_be_bytes())
+                .await?;
             send.write_all(response).await?;
 
             let Ok((mut host_send, mut host_recv)) = host.connection.open_bi().await else {
@@ -258,7 +271,11 @@ async fn handle_relay_stream(
                         if recv.read_exact(&mut buf).await.is_err() {
                             break;
                         }
-                        if host_send.write_all(&(len as u32).to_be_bytes()).await.is_err() {
+                        if host_send
+                            .write_all(&(len as u32).to_be_bytes())
+                            .await
+                            .is_err()
+                        {
                             break;
                         }
                         if host_send.write_all(&buf).await.is_err() {

@@ -113,7 +113,7 @@ impl InputInjector {
         #[cfg(target_os = "macos")]
         {
             use core_graphics::event::{
-                CGEvent, CGEventFlags, CGEventMouseSubtype, CGPoint, CGMouseButton,
+                CGEvent, CGEventFlags, CGEventMouseSubtype, CGMouseButton, CGPoint,
             };
             use core_graphics::event_source::CGEventSource;
 
@@ -216,12 +216,8 @@ impl InputInjector {
                         InputAction::KeyDown => core_graphics::event::CGEventFlag::None,
                         InputAction::KeyUp => core_graphics::event::CGEventFlag::None,
                         InputAction::KeyPress => {
-                            let down = CGEvent::new_keyboard_event(
-                                source,
-                                keycode,
-                                true,
-                            )
-                            .map_err(|e| anyhow::anyhow!("macOS key down failed: {}", e))?;
+                            let down = CGEvent::new_keyboard_event(source, keycode, true)
+                                .map_err(|e| anyhow::anyhow!("macOS key down failed: {}", e))?;
                             down.post(core_graphics::event::CGEventTapLocation::HID);
                             core_graphics::event::CGEventFlag::None
                         }

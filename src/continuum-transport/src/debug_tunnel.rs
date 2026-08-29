@@ -48,10 +48,8 @@ impl DebugTunnelServer {
                     if let Ok(json) = resp.json::<serde_json::Value>().await {
                         if let Some(browser) = json.get("Browser").and_then(|v| v.as_str()) {
                             if browser.contains("WebView2") || browser.contains("Edg") {
-                                self.cdp_url = Some(format!(
-                                    "ws://127.0.0.1:{}/devtools/browser",
-                                    port
-                                ));
+                                self.cdp_url =
+                                    Some(format!("ws://127.0.0.1:{}/devtools/browser", port));
                                 tracing::info!(
                                     port = port,
                                     browser = browser,

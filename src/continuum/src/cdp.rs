@@ -5,7 +5,7 @@
 // =================================================================
 
 use axum::{
-    extract::{State, WebSocketUpgrade, ws::WebSocket},
+    extract::{ws::WebSocket, State, WebSocketUpgrade},
     response::IntoResponse,
     routing::get,
     Json, Router,
@@ -214,7 +214,11 @@ pub(crate) async fn process_cdp_command(state: &DebugState, cmd: &CdpCommand) ->
             })
         }
         "DOM.getBoxModel" => {
-            let node_id = cmd.params.get("nodeId").and_then(|v| v.as_u64()).unwrap_or(1);
+            let node_id = cmd
+                .params
+                .get("nodeId")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1);
             let s = state.state.read();
             let elem = s.elements.iter().find(|e| e.node_id == node_id.to_string());
             match elem {

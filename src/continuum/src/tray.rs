@@ -1,9 +1,8 @@
-use tray_icon::{
-    Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
-    menu::{Menu, MenuItem, PredefinedMenuItem, MenuEvent},
-    MouseButton, MouseButtonState,
-};
 use std::sync::{Arc, Mutex};
+use tray_icon::{
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayStatus {

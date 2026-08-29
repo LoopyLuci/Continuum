@@ -123,10 +123,7 @@ mod tests {
             .await
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json["description"]
-            .as_str()
-            .unwrap()
-            .contains("Continuum"));
+        assert!(json["description"].as_str().unwrap().contains("Continuum"));
     }
 
     #[tokio::test]
@@ -239,7 +236,10 @@ mod tests {
         let resp = process_cdp_command(&state, &cmd).await;
         assert_eq!(resp.id, 8);
         assert!(resp.error.is_none());
-        assert!(resp.result["error"].as_str().unwrap().contains("Network.enable"));
+        assert!(resp.result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Network.enable"));
     }
 
     #[tokio::test]

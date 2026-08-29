@@ -100,8 +100,14 @@ mod tests {
     async fn test_cdp_various_commands_roundtrip() {
         let commands = vec![
             ("Page.enable", serde_json::json!({})),
-            ("Page.captureScreenshot", serde_json::json!({ "format": "png" })),
-            ("Runtime.evaluate", serde_json::json!({ "expression": "1+1" })),
+            (
+                "Page.captureScreenshot",
+                serde_json::json!({ "format": "png" }),
+            ),
+            (
+                "Runtime.evaluate",
+                serde_json::json!({ "expression": "1+1" }),
+            ),
             ("DOM.getDocument", serde_json::json!({ "depth": 3 })),
             ("DOM.getBoxModel", serde_json::json!({ "nodeId": 1 })),
             (

@@ -108,21 +108,25 @@ fn capture_scrap(monitor_id: u32) -> ContinuumResult<DynamicImage> {
     let display = scrap::Display::primary().map_err(|e| {
         ContinuumError::CaptureFailed(format!("scrap primary display failed: {}", e))
     })?;
-    let mut capturer = scrap::Capturer::new(&display).map_err(|e| {
-        ContinuumError::CaptureFailed(format!("scrap capturer failed: {}", e))
-    })?;
+    let mut capturer = scrap::Capturer::new(&display)
+        .map_err(|e| ContinuumError::CaptureFailed(format!("scrap capturer failed: {}", e)))?;
 
-    let frame = capturer.frame().map_err(|e| {
-        ContinuumError::CaptureFailed(format!("scrap frame capture failed: {}", e))
-    })?;
+    let frame = capturer
+        .frame()
+        .map_err(|e| ContinuumError::CaptureFailed(format!("scrap frame capture failed: {}", e)))?;
 
     let width = frame.width();
     let height = frame.height();
-    ensure!(width > 0 && height > 0, "scrap captured frame has zero dimensions")?;
+    ensure!(
+        width > 0 && height > 0,
+        "scrap captured frame has zero dimensions"
+    )?;
 
     ImageBuffer::from_raw(width, height, frame.to_vec())
         .map(DynamicImage::ImageRgba8)
-        .ok_or_else(|| ContinuumError::CaptureFailed("Failed to build image from scrap frame".into()))
+        .ok_or_else(|| {
+            ContinuumError::CaptureFailed("Failed to build image from scrap frame".into())
+        })
 }
 
 pub fn synthesize_demo_frame() -> DynamicImage {

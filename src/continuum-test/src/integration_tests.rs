@@ -919,7 +919,11 @@ mod tests {
             let s_epk = server.encrypted_public_key();
             let c_result = client.complete(&s_epk).unwrap();
             let s_result = server.complete(&c_epk).unwrap();
-            assert_eq!(c_result.sas, s_result.sas, "SAS mismatch for password: {}", password);
+            assert_eq!(
+                c_result.sas, s_result.sas,
+                "SAS mismatch for password: {}",
+                password
+            );
             assert_eq!(c_result.session_key, s_result.session_key);
         }
     }
@@ -978,7 +982,10 @@ mod tests {
             assert_eq!(dec, msg.as_bytes());
         }
         let enc = alice.encrypt(b"ratchet-trigger").unwrap();
-        assert!(enc.ratchet_key.is_some(), "Frame at interval boundary should carry ratchet key");
+        assert!(
+            enc.ratchet_key.is_some(),
+            "Frame at interval boundary should carry ratchet key"
+        );
         let dec = bob.decrypt(&enc).unwrap();
         assert_eq!(dec, b"ratchet-trigger");
     }
@@ -1120,10 +1127,20 @@ mod tests {
 
         plugin.on_frame_encoded(&mut data, &mut sem);
         plugin.on_frame_encoded(&mut data, &mut sem);
-        assert_eq!(plugin.frame_count.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert_eq!(
+            plugin
+                .frame_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            2
+        );
 
         plugin.on_session_start("new-session");
-        assert_eq!(plugin.frame_count.load(std::sync::atomic::Ordering::Relaxed), 0);
+        assert_eq!(
+            plugin
+                .frame_count
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
     }
 
     // ── Codec Tests ───────────────────────────────────────────────────
@@ -1188,7 +1205,10 @@ mod tests {
     fn test_error_types_display() {
         let errors: Vec<Box<dyn std::fmt::Display>> = vec![
             Box::new("generic error"),
-            Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "file not found")),
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "file not found",
+            )),
         ];
         for err in &errors {
             let msg = format!("{}", err);
@@ -1265,7 +1285,7 @@ mod tests {
 
     #[test]
     fn test_connection_metrics_health_transitions() {
-        use continuum_transport::client::{ConnectionMetrics, ConnectionHealth};
+        use continuum_transport::client::{ConnectionHealth, ConnectionMetrics};
         let mut m = ConnectionMetrics::new();
         assert_eq!(m.health(), ConnectionHealth::Good);
 
@@ -2006,7 +2026,12 @@ mod tests {
             y: None,
             button: None,
             key: Some("Enter".into()),
-            modifiers: Some(continuum_transport::ModifierKeys { ctrl: true, alt: false, shift: false, super_key: false }),
+            modifiers: Some(continuum_transport::ModifierKeys {
+                ctrl: true,
+                alt: false,
+                shift: false,
+                super_key: false,
+            }),
             scroll_x: None,
             scroll_y: None,
             monitor_id: None,
@@ -2045,7 +2070,12 @@ mod tests {
             (true, true, true, true),
         ];
         for (ctrl, alt, shift, super_key) in combos {
-            let mods = continuum_transport::ModifierKeys { ctrl, alt, shift, super_key };
+            let mods = continuum_transport::ModifierKeys {
+                ctrl,
+                alt,
+                shift,
+                super_key,
+            };
             let json = serde_json::to_string(&mods).unwrap();
             let decoded: continuum_transport::ModifierKeys = serde_json::from_str(&json).unwrap();
             assert_eq!(decoded.ctrl, ctrl);
@@ -2077,7 +2107,8 @@ mod tests {
         ];
         for ct in types {
             let json = serde_json::to_string(&ct).unwrap();
-            let decoded: continuum_transport::ClipboardContentType = serde_json::from_str(&json).unwrap();
+            let decoded: continuum_transport::ClipboardContentType =
+                serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, ct);
         }
     }
@@ -2127,7 +2158,8 @@ mod tests {
         ];
         for d in dirs {
             let json = serde_json::to_string(&d).unwrap();
-            let decoded: continuum_transport::TransferDirection = serde_json::from_str(&json).unwrap();
+            let decoded: continuum_transport::TransferDirection =
+                serde_json::from_str(&json).unwrap();
             assert_eq!(decoded, d);
         }
     }
@@ -2292,23 +2324,27 @@ mod tests {
     fn test_intent_message_text_intent_v2() {
         let msg = continuum_transport::IntentMessage::TextIntent("open browser".into());
         match msg {
-            continuum_transport::IntentMessage::TextIntent(text) => assert_eq!(text, "open browser"),
+            continuum_transport::IntentMessage::TextIntent(text) => {
+                assert_eq!(text, "open browser")
+            }
             _ => panic!("Wrong variant"),
         }
     }
 
     #[test]
     fn test_intent_response_pairing_result_v2() {
-        let resp = continuum_transport::IntentResponse::PairingResult(continuum_transport::PairingResponse {
-            accepted: true,
-            message: "OK".into(),
-            session_token: Some("tok".into()),
-            permissions: continuum_transport::Permissions::default(),
-            server_e2e_public: vec![],
-            pake_encrypted_key: vec![],
-            resume_token: None,
-            sas_words: vec!["alpha".into(), "beta".into()],
-        });
+        let resp = continuum_transport::IntentResponse::PairingResult(
+            continuum_transport::PairingResponse {
+                accepted: true,
+                message: "OK".into(),
+                session_token: Some("tok".into()),
+                permissions: continuum_transport::Permissions::default(),
+                server_e2e_public: vec![],
+                pake_encrypted_key: vec![],
+                resume_token: None,
+                sas_words: vec!["alpha".into(), "beta".into()],
+            },
+        );
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("pairing_result"));
     }
@@ -2373,9 +2409,14 @@ mod tests {
     #[test]
     fn test_codec_quality_ordering() {
         let img = continuum_transport::capture::synthesize_demo_frame();
-        let sizes: Vec<usize> = vec![10, 30, 50, 70, 90].iter().map(|&q| {
-            continuum_transport::codec::encode_jpeg(&img, q).unwrap().len()
-        }).collect();
+        let sizes: Vec<usize> = vec![10, 30, 50, 70, 90]
+            .iter()
+            .map(|&q| {
+                continuum_transport::codec::encode_jpeg(&img, q)
+                    .unwrap()
+                    .len()
+            })
+            .collect();
         // Sizes should generally increase with quality
         assert!(sizes[4] > sizes[0]);
     }
@@ -2489,7 +2530,7 @@ mod tests {
 
     #[test]
     fn test_connection_health_good() {
-        use continuum_transport::client::{ConnectionMetrics, ConnectionHealth};
+        use continuum_transport::client::{ConnectionHealth, ConnectionMetrics};
         let mut m = ConnectionMetrics::new();
         for _ in 0..10 {
             m.record_latency(10.0);
@@ -2500,7 +2541,7 @@ mod tests {
 
     #[test]
     fn test_connection_health_critical_latency() {
-        use continuum_transport::client::{ConnectionMetrics, ConnectionHealth};
+        use continuum_transport::client::{ConnectionHealth, ConnectionMetrics};
         let mut m = ConnectionMetrics::new();
         for _ in 0..10 {
             m.record_latency(600.0);
@@ -2552,17 +2593,18 @@ mod tests {
         // Test the statistical anomaly detection logic
         let values: Vec<f64> = vec![8000.0; 50];
         let mean: f64 = values.iter().sum::<f64>() / values.len() as f64;
-        let variance: f64 = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
+        let variance: f64 =
+            values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / values.len() as f64;
         let std_dev = variance.sqrt();
-        
+
         // Normal value
         let normal = 8500.0f64;
         let sigma_normal = (normal - mean).abs() / std_dev.max(1e-10);
-        
+
         // Spike value
         let spike = 100000.0f64;
         let sigma_spike = (spike - mean).abs() / std_dev.max(1e-10);
-        
+
         // Normal should be within 3 sigma, spike should be beyond
         // (when std_dev is 0, both will be 0/inf — handled by max)
         if std_dev > 1e-10 {
@@ -2575,14 +2617,14 @@ mod tests {
     fn test_rolling_average() {
         let mut window: Vec<f64> = Vec::new();
         let max_size = 100;
-        
+
         for i in 0..200 {
             window.push(8000.0 + (i % 10) as f64);
             if window.len() > max_size {
                 window.remove(0);
             }
         }
-        
+
         assert_eq!(window.len(), 100);
         let mean: f64 = window.iter().sum::<f64>() / window.len() as f64;
         assert!((mean - 8004.5).abs() < 1.0);
@@ -2594,11 +2636,11 @@ mod tests {
         let mut received_bytes = 0u64;
         let total_size = 1024u64;
         let chunk_offsets = vec![0u64, 256, 512];
-        
+
         for _offset in &chunk_offsets {
             received_bytes += 256; // Simulated chunk size
         }
-        
+
         assert_eq!(received_bytes, 768);
         assert!(received_bytes < total_size);
     }
