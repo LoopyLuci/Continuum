@@ -635,10 +635,13 @@ pub async fn maintain_connection(
                                 if audio_recv.read_exact(&mut data).await.is_err() {
                                     break;
                                 }
-                                if let Ok(frame) =
-                                    serde_json::from_slice::<crate::audio::AudioFrame>(&data)
+                                #[cfg(feature = "audio")]
                                 {
-                                    let _ = audio_tx.send(ConnectionEvent::Audio(frame)).await;
+                                    if let Ok(frame) =
+                                        serde_json::from_slice::<crate::audio::AudioFrame>(&data)
+                                    {
+                                        let _ = audio_tx.send(ConnectionEvent::Audio(frame)).await;
+                                    }
                                 }
                             }
                         });
@@ -791,6 +794,7 @@ pub enum ConnectionEvent {
         data: Vec<u8>,
         semantics: FrameSemantics,
     },
+    #[cfg(feature = "audio")]
     Audio(crate::audio::AudioFrame),
     Status(ConnectionStatus),
     Metrics(ConnectionMetrics),

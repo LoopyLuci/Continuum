@@ -1,3 +1,4 @@
+#[cfg(feature = "audio")]
 pub mod audio;
 pub mod benchmarks;
 pub mod capture;

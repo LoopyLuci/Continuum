@@ -875,7 +875,10 @@ async fn handle_bi_stream(
             handle_media_stream(&mut send, state, encoder, rate_control, metrics, addr).await
         }
         ApqStreamType::Intent => handle_intent_stream(&mut send, &mut recv, state, addr).await,
+        #[cfg(feature = "audio")]
         ApqStreamType::Audio => handle_audio_stream(&mut send, state, addr).await,
+        #[cfg(not(feature = "audio"))]
+        ApqStreamType::Audio => Ok(()),
         ApqStreamType::Debug => handle_debug_stream(&mut send, &mut recv, state, addr).await,
         ApqStreamType::Clipboard => {
             handle_clipboard_stream(&mut send, &mut recv, state, addr).await
@@ -1078,51 +1081,11 @@ async fn handle_media_stream(
 }
 
 async fn handle_audio_stream(
-    send: &mut SendStream,
-    state: Arc<ServerState>,
-    addr: SocketAddr,
+    _send: &mut SendStream,
+    _state: Arc<ServerState>,
+    _addr: SocketAddr,
 ) -> Result<()> {
-    if !state.is_paired(&addr) {
-        return Ok(());
-    }
-
-    let session_id = state.session_id(&addr);
-    tracing::info!(addr = %addr, session = %session_id, "Audio stream started");
-
-    // Run AudioCapturer on a dedicated thread because cpal::Stream is !Send.
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<crate::audio::AudioFrame>(32);
-    std::thread::spawn(move || {
-        let mut capturer = crate::audio::AudioCapturer::new(48000, 2);
-        loop {
-            match capturer.capture() {
-                Ok(frame) => {
-                    if tx.blocking_send(frame).is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, "Audio capture failed");
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                }
-            }
-        }
-    });
-
-    while let Some(frame) = rx.recv().await {
-        let data = serde_json::to_vec(&frame)?;
-        if send
-            .write_all(&(data.len() as u32).to_be_bytes())
-            .await
-            .is_err()
-        {
-            break;
-        }
-        if send.write_all(&data).await.is_err() {
-            break;
-        }
-    }
-
-    tracing::info!(addr = %addr, "Audio stream ended");
+    // Audio feature disabled - no-op
     Ok(())
 }
 

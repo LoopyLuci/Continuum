@@ -150,8 +150,8 @@ fn start_connection(addr: SocketAddr, password: String) -> std::sync::mpsc::Rece
                             }
                             continue;
                         }
-                        continuum_transport::client::ConnectionEvent::Audio(_) => continue,
                         continuum_transport::client::ConnectionEvent::Metrics(_) => continue,
+                        _ => continue,
                     };
                     if tx2.send(out).is_err() {
                         break;

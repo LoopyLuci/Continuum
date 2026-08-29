@@ -172,6 +172,8 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "audio")]
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_pipeline_end_to_end() {
         use continuum_transport::audio::*;
@@ -1253,6 +1255,7 @@ mod tests {
 
     // ── Audio Tests ───────────────────────────────────────────────────
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_capturer_creation() {
         let capturer = continuum_transport::audio::AudioCapturer::new(48000, 2);
@@ -1260,6 +1263,7 @@ mod tests {
         assert!(!capturer.is_active());
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_player_creation() {
         let player = continuum_transport::audio::AudioPlayer::new(48000, 2);
@@ -1267,6 +1271,7 @@ mod tests {
         assert!(!player.is_muted());
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_frame_roundtrip() {
         let frame = continuum_transport::audio::AudioFrame {
@@ -2479,18 +2484,21 @@ mod tests {
         assert!(config.max_clients > 0);
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_capturer_44100_mono() {
         let capturer = continuum_transport::audio::AudioCapturer::new(44100, 1);
         assert_eq!(capturer.frame_size(), 441); // 44100/100
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_capturer_48000_stereo() {
         let capturer = continuum_transport::audio::AudioCapturer::new(48000, 2);
         assert_eq!(capturer.frame_size(), 960); // 48000/100 * 2
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_player_volume_clamp() {
         let mut player = continuum_transport::audio::AudioPlayer::new(48000, 2);
@@ -2500,6 +2508,7 @@ mod tests {
         assert_eq!(player.volume(), 2.0);
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_echo_detection_silent() {
         let a = vec![0.0f32; 100];
@@ -2507,6 +2516,7 @@ mod tests {
         assert!(!continuum_transport::audio::detect_echo(&a, &b));
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_echo_detection_identical() {
         let a: Vec<f32> = (0..100).map(|i| (i as f32 * 0.1).sin()).collect();
@@ -2514,6 +2524,7 @@ mod tests {
         assert!(continuum_transport::audio::detect_echo(&a, &b));
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_echo_detection_different() {
         let a: Vec<f32> = (0..100).map(|i| (i as f32 * 0.1).sin()).collect();
@@ -2521,6 +2532,7 @@ mod tests {
         assert!(!continuum_transport::audio::detect_echo(&a, &b));
     }
 
+    #[cfg(feature = "audio")]
     #[test]
     fn test_audio_echo_detection_length_mismatch() {
         let a = vec![1.0f32; 100];

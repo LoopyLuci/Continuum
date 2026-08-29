@@ -1,3 +1,5 @@
+#![cfg(feature = "audio")]
+
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::{Deserialize, Serialize};

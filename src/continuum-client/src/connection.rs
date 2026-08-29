@@ -86,7 +86,6 @@ impl NetworkWorker {
                                     }
                                     continue;
                                 }
-                                continuum_transport::client::ConnectionEvent::Audio(_) => continue,
                                 continuum_transport::client::ConnectionEvent::Metrics(_) => {
                                     continue
                                 }
