@@ -1,0 +1,25 @@
+[package]
+name = "continuum-ci"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "continuum-ci"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive", "env"] }
+toml = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+notify = { version = "7", features = ["macos_kqueue"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+syn = "2"
+dirs = "6"

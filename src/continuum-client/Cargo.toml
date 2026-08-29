@@ -1,0 +1,32 @@
+[package]
+name = "continuum-client"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "continuum-client"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+continuum-transport = { path = "../continuum-transport" }
+image = "0.25"
+eframe = "0.31"
+clap = { version = "4", features = ["derive"] }
+arboard = "3"
+chrono = "0.4"
+continuum-observability = { path = "../continuum-observability" }
+parking_lot = "0.12"
+axum = "0.8"
+rand = "0.8"
+hostname = "0.4"
+dirs = "6"
+toml = "0.8"

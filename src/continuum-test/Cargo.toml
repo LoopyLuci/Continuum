@@ -1,0 +1,30 @@
+[package]
+name = "continuum-test"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "continuum-test"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full", "process"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+continuum-transport = { path = "../continuum-transport" }
+continuum-security = { path = "../continuum-security" }
+rand.workspace = true
+sysinfo = "0.32"
+flate2 = "1"
+tar = "0.4"
+continuum-observability = { path = "../continuum-observability" }
+image = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+axum = "0.8"
+parking_lot = "0.12"
+hex = "0.4"

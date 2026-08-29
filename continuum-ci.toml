@@ -1,0 +1,85 @@
+[project]
+name = "continuum"
+work_dir = "."
+dist_dir = "target/ci-release"
+data_dir = 'C:\Users\limpi\AppData\Roaming\continuum-ci'
+
+[project.env]
+
+[pipeline]
+max_parallel = 4
+timeout_secs = 600
+fail_fast = true
+branch_filter = ".*"
+
+[watch]
+enabled = true
+paths = [
+    "src",
+    "Cargo.toml",
+]
+ignore_patterns = [
+    "target/",
+    ".git/",
+]
+debounce_ms = 1000
+
+[dashboard]
+enabled = true
+listen_addr = "127.0.0.1"
+port = 9090
+
+[[stages]]
+name = "check"
+depends_on = []
+commands = ["cargo check --workspace"]
+artifacts = []
+cache_key = ""
+timeout_secs = 300
+allow_failure = false
+
+[stages.env]
+
+[[stages]]
+name = "test"
+depends_on = ["check"]
+commands = ["cargo test --workspace"]
+artifacts = []
+cache_key = ""
+timeout_secs = 300
+allow_failure = false
+
+[stages.env]
+
+[[stages]]
+name = "clippy"
+depends_on = ["check"]
+commands = ["cargo clippy --workspace --all-targets -- -D warnings"]
+artifacts = []
+cache_key = ""
+timeout_secs = 300
+allow_failure = true
+
+[stages.env]
+
+[[stages]]
+name = "fmt"
+depends_on = []
+commands = ["cargo fmt --all -- --check"]
+artifacts = []
+cache_key = ""
+timeout_secs = 60
+allow_failure = true
+
+[stages.env]
+
+[[stages]]
+name = "build-release"
+depends_on = ["test"]
+commands = ["cargo build --release --bin continuum-server --bin continuum-client"]
+artifacts = ["target/release/continuum-server*"]
+cache_key = ""
+timeout_secs = 600
+allow_failure = false
+
+[stages.env]

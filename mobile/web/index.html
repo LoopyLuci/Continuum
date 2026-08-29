@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuum Web Client</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a10; color: #d0d0dc; font-family: -apple-system, sans-serif; overflow: hidden; height: 100vh; }
+  #remoteView { width: 100vw; height: 100vh; object-fit: contain; background: #0a0a10; }
+  #overlay { position: fixed; top: 0; left: 0; right: 0; padding: 12px 20px; background: linear-gradient(180deg, rgba(0,0,0,0.6), transparent); display: flex; align-items: center; gap: 16px; opacity: 0; transition: opacity 0.3s; }
+  #overlay:hover { opacity: 1; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-dot.connected { background: #22c55e; }
+  .status-dot.disconnected { background: #ef4444; }
+  #stats { margin-left: auto; font-size: 12px; font-family: monospace; color: #888; }
+  #settings { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a24; border-radius: 12px; padding: 24px; min-width: 300px; border: 1px solid #252533; }
+  #settings.active { display: block; }
+  input, button { background: #252533; border: 1px solid #333; color: #d0d0dc; padding: 8px 12px; border-radius: 6px; width: 100%; margin-bottom: 8px; }
+  button { background: #3b82f6; cursor: pointer; font-weight: 600; }
+  button:hover { background: #2563eb; }
+</style>
+</head>
+<body>
+<canvas id="remoteView"></canvas>
+<div id="overlay">
+  <span class="status-dot disconnected" id="statusDot"></span>
+  <span id="statusText">Disconnected</span>
+  <span id="stats"></span>
+  <button onclick="toggleSettings()" style="width:auto;padding:4px 12px;margin:0">⚙</button>
+</div>
+<div id="settings">
+  <h3 style="margin-bottom:12px">Connect</h3>
+  <input id="serverAddr" placeholder="Server address" value="127.0.0.1:4433">
+  <input id="pairingCode" placeholder="Pairing code" value="continuum">
+  <button onclick="connect()">Connect</button>
+  <button onclick="toggleSettings()" style="background:#333">Cancel</button>
+</div>
+<script>
+const canvas = document.getElementById('remoteView');
+const ctx = canvas.getContext('2d');
+
+let ws = null;
+let stats = { fps: 0, latency: 0, bandwidth: 0 };
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// WebRTC Data Channel or WebSocket transport
+function connect() {
+    const addr = document.getElementById('serverAddr').value;
+    const code = document.getElementById('pairingCode').value;
+
+    document.getElementById('settings').classList.remove('active');
+    setStatus('connecting', 'Connecting...');
+
+    // WebSocket fallback when QUIC is not available in browser
+    ws = new WebSocket(`ws://${addr}/continuum`);
+
+    ws.onopen = () => {
+        setStatus('connected', 'Connected');
+        // Send pairing handshake
+        ws.send(JSON.stringify({
+            type: 'pairing',
+            pairing_code: code,
+            client_name: 'Web Client',
+            protocol_version: 2
+        }));
+    };
+
+    ws.onmessage = (event) => {
+        // Parse frame data and render to canvas
+        // decode via WebCodecs when available
+        if (typeof event.data === 'string') {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'pairing_result') {
+                setStatus(msg.accepted ? 'connected' : 'disconnected',
+                    msg.accepted ? 'Paired - Streaming' : 'Pairing rejected');
+            }
+        } else if (event.data instanceof Blob) {
+            const blob = event.data;
+            createImageBitmap(blob).then(bitmap => {
+                ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                stats.fps = (stats.fps * 0.9) + (1 / 0.016 * 0.1);
+                bitmap.close();
+            });
+        }
+    };
+
+    ws.onclose = () => setStatus('disconnected', 'Disconnected');
+    ws.onerror = () => setStatus('disconnected', 'Connection error');
+}
+
+function setStatus(state, text) {
+    document.getElementById('statusDot').className = 'status-dot ' + state;
+    document.getElementById('statusText').textContent = text;
+}
+
+function toggleSettings() {
+    document.getElementById('settings').classList.toggle('active');
+}
+
+// Stats update loop
+setInterval(() => {
+    document.getElementById('stats').textContent =
+        `${stats.fps.toFixed(0)} FPS`;
+}, 1000);
+
+// Keyboard input
+document.addEventListener('keydown', (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', action: 'key_down', key: e.key }));
+        e.preventDefault();
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', action: 'key_up', key: e.key }));
+        e.preventDefault();
+    }
+});
+
+// Mouse input
+canvas.addEventListener('mousemove', (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'input', action: 'mouse_move',
+            x: e.offsetX, y: e.offsetY
+        }));
+    }
+});
+
+canvas.addEventListener('click', (e) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'input', action: 'mouse_click',
+            x: e.offsetX, y: e.offsetY, button: 'left'
+        }));
+    }
+});
+</script>
+</body>
+</html>

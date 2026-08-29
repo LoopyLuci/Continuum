@@ -1,0 +1,118 @@
+version: "3.8"
+
+# Continuum — Docker deployment (no Kubernetes required)
+# ======================================================
+#
+# Quick start:
+#   docker compose up -d
+#   docker compose logs -f
+#
+# Pairing code set via environment:
+#   PAIRING_CODE=my-secret docker compose up -d
+#
+# Health check:
+#   curl http://localhost:9091/health
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+    ports:
+      - "4433:4433/udp"     # QUIC media stream
+      - "9091:9091"         # Health endpoint
+    environment:
+      - CONTINUUM_PAIRING_CODE=${PAIRING_CODE:-continuum}
+      - RUST_LOG=${RUST_LOG:-info}
+      - CONTINUUM_LISTEN_ADDR=0.0.0.0:4433
+      - CONTINUUM_QUALITY=${QUALITY:-85}
+      - CONTINUUM_FPS=${FPS:-30}
+      - CONTINUUM_DATA_DIR=/data
+    volumes:
+      - continuum-data:/data
+      - continuum-recordings:/recordings
+    restart: unless-stopped
+    stop_grace_period: 10s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - continuum-net
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 128M
+
+  relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: relay
+    ports:
+      - "4434:4434/udp"     # QUIC relay
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - CONTINUUM_RELAY_ADDR=0.0.0.0:4434
+    restart: unless-stopped
+    networks:
+      - continuum-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+
+  ci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ci
+    volumes:
+      - .:/workspace
+      - continuum-ci-data:/data
+    working_dir: /workspace
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - CONTINUUM_CI_DATA_DIR=/data
+    profiles:
+      - ci         # Only started with: docker compose --profile ci up
+    networks:
+      - continuum-net
+
+  # Web dashboard for CI (start with: docker compose --profile ci up -d)
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ci
+    ports:
+      - "9090:9090"
+    volumes:
+      - continuum-ci-data:/data
+    environment:
+      - RUST_LOG=info
+    command: ["continuum-ci", "dashboard", "--addr", "0.0.0.0"]
+    profiles:
+      - ci
+    networks:
+      - continuum-net
+
+networks:
+  continuum-net:
+    driver: bridge
+
+volumes:
+  continuum-data:
+  continuum-recordings:
+  continuum-ci-data:

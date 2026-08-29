@@ -1,0 +1,16 @@
+[package]
+name = "continuum-plugin-sdk"
+version.workspace = true
+edition.workspace = true
+description = "DEPRECATED: plugin SDK is not wired into any runtime path. Use core crates directly."
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[features]
+default = []

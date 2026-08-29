@@ -1,0 +1,11 @@
+apiVersion: v2
+name: continuum
+description: Continuum remote desktop platform
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+keywords:
+  - remote-desktop
+  - streaming
+  - quic
+home: https://github.com/continuum

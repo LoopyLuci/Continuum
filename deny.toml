@@ -1,0 +1,68 @@
+# Deny configuration for cargo-deny
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "warn"
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Unicode-DFS-2016"]
+default-tolerance = 1.0
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+# Allow certain crates that are transitive dependencies
+# GTK3 bindings are unmaintained but still widely used
+[[allow]]
+name = "atk"
+[[allow]]
+name = "atk-sys"
+[[allow]]
+name = "gdk"
+[[allow]]
+name = "gdk-sys"
+[[allow]]
+name = "gtk"
+[[allow]]
+name = "gtk-sys"
+[[allow]]
+name = "gtk3-macros"
+[[allow]]
+name = "glib"
+[[allow]]
+name = "glib-sys"
+[[allow]]
+name = "gobject-sys"
+[[allow]]
+name = "libappindicator"
+[[allow]]
+name = "libappindicator-sys"
+
+# Allow unmaintained crates without safe alternatives
+[[allow]]
+name = "fxhash"
+[[allow]]
+name = "instant"
+[[allow]]
+name = "paste"
+[[allow]]
+name = "proc-macro-error"
+[[allow]]
+name = "ttf-parser"
+
+# Allow unsound crates that are transitive dependencies
+# These are from optional features and will be addressed in future updates
+[[allow]]
+name = "event-listener"
+[[allow]]
+name = "memmap2"
+
+# Allow yanked spin crate (transitive dependency)
+[[allow]]
+name = "spin"

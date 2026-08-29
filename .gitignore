@@ -1,0 +1,28 @@
+# Build artifacts
+/target/
+*.exe
+*.dll
+*.lib
+*.so
+*.dylib
+*.a
+
+# Debug / temporary files
+*-err.txt
+*-out.txt
+client_stderr.txt
+client_stdout.txt
+continuum-err.txt
+continuum-out.txt
+inst2-err.txt
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

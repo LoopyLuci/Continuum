@@ -1,0 +1,49 @@
+[workspace]
+members = [
+  "src/continuum-transport",
+  "src/continuum-server",
+  "src/continuum-client",
+  "src/continuum",
+  "src/continuum-test",
+  "src/continuum-observability",
+  "src/continuum-security",
+  "src/relay-server",
+  "src/continuum-ci",
+]
+default-members = [
+  "src/continuum-transport",
+  "src/continuum-server",
+  "src/continuum-client",
+  "src/continuum",
+  "src/continuum-test",
+  "src/continuum-observability",
+  "src/continuum-security",
+  "src/relay-server",
+  "src/continuum-ci",
+]
+exclude = ["src/continuum-ai", "src/continuum-plugin-sdk"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.2.0"
+rust-version = "1.75"
+license = "MIT"
+repository = "https://github.com/loopyluci/Continuum"
+
+[workspace.dependencies]
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+image = { version = "0.25", features = ["jpeg", "png"] }
+thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

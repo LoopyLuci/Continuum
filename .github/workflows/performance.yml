@@ -1,0 +1,37 @@
+name: Performance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  flamegraph:
+    name: Flamegraph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install flamegraph --locked
+      - run: cargo build --release -p continuum-transport --example flamegraph_test
+      - run: ./target/release/flamegraph_test > flamegraph.svg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flamegraph
+          path: flamegraph.svg
+
+  bloat:
+    name: Bloat
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-bloat --locked
+      - run: cargo bloat --release -p continuum-transport --no-binary-size-limit

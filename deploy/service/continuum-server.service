@@ -1,0 +1,52 @@
+# Continuum Server — systemd service (Linux)
+# ==========================================
+# Install:
+#   sudo cp continuum-server.service /etc/systemd/system/
+#   sudo nano /etc/default/continuum-server   # optional config
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now continuum-server
+#
+# View logs:
+#   journalctl -u continuum-server -f
+#
+# No Docker or Kubernetes required — runs as a native systemd service.
+
+[Unit]
+Description=Continuum Remote Desktop Server
+Documentation=https://github.com/continuum
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=continuum
+Group=continuum
+RuntimeDirectory=continuum
+RuntimeDirectoryMode=0755
+StateDirectory=continuum
+StateDirectoryMode=0755
+CacheDirectory=continuum
+CacheDirectoryMode=0755
+
+# Config via environment file (optional)
+EnvironmentFile=-/etc/default/continuum-server
+
+# Default arguments (override via env file)
+ExecStart=/usr/local/bin/continuum-server \
+    --listen=${CONTINUUM_LISTEN_ADDR:-0.0.0.0:4433} \
+    --quality=${CONTINUUM_QUALITY:-85} \
+    --fps=${CONTINUUM_FPS:-30}
+
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
