@@ -110,7 +110,7 @@ pub(crate) async fn handle_json_list(State(state): State<DebugState>) -> Json<se
         "type": "page",
         "url": format!("continuum://localhost:{}", s.machine_id),
         "title": "Continuum",
-        "webSocketDebuggerUrl": format!("ws://127.0.0.1:9094/devtools/page/continuum"),
+        "webSocketDebuggerUrl": "ws://127.0.0.1:9094/devtools/page/continuum".to_string(),
     }]))
 }
 

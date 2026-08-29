@@ -66,3 +66,11 @@ name = "memmap2"
 # Allow yanked spin crate (transitive dependency)
 [[allow]]
 name = "spin"
+
+# wasmtime advisories: tracked for upgrade when wasm-plugins feature is stabilized
+[[allow]]
+name = "wasmtime"
+
+# quick-xml advisories: transitive dependency, track upstream for patched version
+[[allow]]
+name = "quick-xml"
