@@ -16,6 +16,8 @@ pub mod capture;
 pub mod audio;
 pub mod input;
 pub mod protocol;
+pub mod identity;
+pub mod pairing;
 
 /// Result type for Continuum operations.
 pub type ContinuumResult<T> = std::result::Result<T, ContinuumError>;
