@@ -46,8 +46,23 @@ pub enum ContinuumError {
     #[error("Protocol error: {0}")]
     Protocol(String),
 
+    #[error("ICE error: {0}")]
+    Ice(String),
+
+    #[error("STUN error: {0}")]
+    Stun(String),
+
     #[error("Not supported: {0}")]
     NotSupported(String),
+
+    #[error("Timeout")]
+    Timeout,
+
+    #[error("Invalid address: {0}")]
+    InvalidAddress(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 
     #[error("Internal error: {0}")]
     Internal(String),

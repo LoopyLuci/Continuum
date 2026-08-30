@@ -1348,6 +1348,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-ice"
+version = "0.2.0"
+dependencies = [
+ "continuum-core",
+ "log",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "continuum-observability"
 version = "0.2.0"
 dependencies = [

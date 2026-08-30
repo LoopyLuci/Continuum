@@ -1,0 +1,19 @@
+[package]
+name = "continuum-ice"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+continuum-core = { path = "../continuum-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+log = "0.4"
+thiserror = "2"
+rand = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
