@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+continuum-core = { path = "../continuum-core" }
 anyhow.workspace = true
 rand.workspace = true
 serde.workspace = true
