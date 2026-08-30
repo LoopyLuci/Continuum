@@ -1,0 +1,19 @@
+[package]
+name = "continuum-codec"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+continuum-core = { path = "../continuum-core" }
+serde = { workspace = true }
+thiserror = "2"
+image = { workspace = true }
+
+[features]
+default = ["software"]
+software = []
+
+[dev-dependencies]

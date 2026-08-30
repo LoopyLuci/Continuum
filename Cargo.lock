@@ -1334,6 +1334,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-codec"
+version = "0.2.0"
+dependencies = [
+ "continuum-core",
+ "image 0.25.10",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "continuum-core"
 version = "0.2.0"
 dependencies = [
