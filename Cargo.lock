@@ -1539,6 +1539,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-ui"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "continuum-core",
+ "continuum-discovery",
+ "continuum-session",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
