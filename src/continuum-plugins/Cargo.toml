@@ -1,0 +1,16 @@
+[package]
+name = "continuum-plugins"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+continuum-core = { path = "../continuum-core" }
+serde = { workspace = true }
+tokio = { workspace = true }
+thiserror = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

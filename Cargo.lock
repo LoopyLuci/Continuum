@@ -1432,6 +1432,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-plugins"
+version = "0.2.0"
+dependencies = [
+ "continuum-core",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "continuum-security"
 version = "0.2.0"
 dependencies = [
