@@ -9,7 +9,7 @@ members = [
   "src/continuum-observability",
   "src/continuum-security",
   "src/relay-server",
-  "src/continuum-ci", "src/continuum-ice", "src/continuum-discovery", "src/continuum-codec", "src/continuum-session",
+  "src/continuum-ci", "src/continuum-ice", "src/continuum-discovery", "src/continuum-codec", "src/continuum-session", "src/continuum-performance",
 ]
 default-members = [
   "src/continuum-transport",
