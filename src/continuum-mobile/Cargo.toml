@@ -1,0 +1,14 @@
+[package]
+name = "continuum-mobile"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+continuum-core = { path = "../continuum-core" }
+serde = { workspace = true }
+serde_json.workspace = true
+
+[dev-dependencies]

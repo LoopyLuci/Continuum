@@ -1382,6 +1382,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-mobile"
+version = "0.2.0"
+dependencies = [
+ "continuum-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "continuum-observability"
 version = "0.2.0"
 dependencies = [
