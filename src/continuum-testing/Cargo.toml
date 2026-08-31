@@ -1,0 +1,22 @@
+[package]
+name = "continuum-testing"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+continuum-core = { path = "../continuum-core" }
+continuum-session = { path = "../continuum-session" }
+continuum-security = { path = "../continuum-security" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+rand = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

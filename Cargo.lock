@@ -1481,6 +1481,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "continuum-testing"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "continuum-core",
+ "continuum-security",
+ "continuum-session",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "continuum-transport"
 version = "0.2.0"
 dependencies = [
