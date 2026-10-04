@@ -360,9 +360,14 @@ pub fn to_axis(pixel: i32, extent: u32) -> f32 {
 }
 
 fn abs_event(axis: &str, value: f32) -> serde_json::Value {
+    // QEMU rejects a float here: "Invalid parameter type for
+    // 'events[0].data.value', expected: integer". to_axis scales
+    // fractionally to keep pointer motion smooth, so the rounding belongs at
+    // this boundary -- and it has to happen, or every pointer event fails and
+    // the mouse silently never moves in the guest.
     serde_json::json!({
         "type": "abs",
-        "data": { "axis": axis, "value": value },
+        "data": { "axis": axis, "value": value.round() as i64 },
     })
 }
 
