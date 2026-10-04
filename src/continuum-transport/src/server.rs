@@ -1080,6 +1080,9 @@ async fn handle_media_stream(
     Ok(())
 }
 
+/// Audio stream handler. Only reachable with the `audio` feature; without it
+/// `handle_bi_stream` answers `ApqStreamType::Audio` with an immediate `Ok`.
+#[cfg(feature = "audio")]
 async fn handle_audio_stream(
     _send: &mut SendStream,
     _state: Arc<ServerState>,

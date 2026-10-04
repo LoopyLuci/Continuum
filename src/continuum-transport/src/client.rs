@@ -619,6 +619,10 @@ pub async fn maintain_connection(
                         audio_send
                             .write_all(&(ApqStreamType::Audio as u32).to_be_bytes())
                             .await?;
+                        // Only the `audio` feature consumes decoded frames;
+                        // without it the reader still drains the stream so the
+                        // server is not left writing into a full window.
+                        #[cfg(feature = "audio")]
                         let audio_tx = event_tx.clone();
                         tokio::spawn(async move {
                             loop {

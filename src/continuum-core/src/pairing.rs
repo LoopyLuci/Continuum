@@ -1,6 +1,5 @@
 //! Pairing code generation and validation.
 
-use crate::ContinuumResult;
 use rand::Rng;
 
 /// Pairing code alphabet (no ambiguous chars: i, l, o, u)

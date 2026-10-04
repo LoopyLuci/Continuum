@@ -32,6 +32,7 @@ bytes = "1"
 flume = "0.11"
 hostname = "0.4"
 continuum-security = { path = "../continuum-security" }
+continuum-core = { path = "../continuum-core" }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 wasmtime = { version = "25", optional = true }
 continuum-observability = { path = "../continuum-observability" }

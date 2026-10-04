@@ -2,6 +2,7 @@
 pub mod audio;
 pub mod benchmarks;
 pub mod capture;
+pub mod capture_qmp;
 pub mod client;
 pub mod codec;
 pub mod config;
@@ -13,11 +14,13 @@ pub mod gpu_encoder;
 pub mod gpu_pipeline;
 pub mod ice_transport;
 pub mod input;
+pub mod input_qmp;
 pub mod lan_discovery;
 pub mod mobile_client;
 pub mod network_enterprise;
 pub mod plugin;
 pub mod qr_code;
+pub mod qmp;
 pub mod recording;
 pub mod server;
 pub mod streaming_engine;
@@ -26,6 +29,7 @@ pub mod types;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm_plugin;
 pub mod wgpu_compositor;
+pub mod ws_sidecar;
 
 pub use capture::*;
 pub use client::{
@@ -36,5 +40,9 @@ pub use codec::{decode_jpeg, encode_jpeg, AdaptiveEncoder};
 pub use config::{ClientArgs, ClientConfig, ServerArgs, ServerConfig};
 pub use lan_discovery::{DiscoveredServer, LanDiscovery};
 pub use qr_code::PairingQr;
+pub use qmp::{QmpClient, QmpError, QmpResult};
+pub use capture_qmp::{QmpCaptureBackend, TABLET_AXIS_MAX};
+pub use input_qmp::{key_for, QmpInputInjector, DEFAULT_KEY_DELAY};
+pub use ws_sidecar::{WsSidecar, VmRegistry, VmTarget, DEFAULT_SIDECAR_PORT};
 pub use server::run_server;
 pub use types::*;

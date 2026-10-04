@@ -29,6 +29,28 @@ async fn main() -> Result<()> {
     tracing::info!(addr = %config.listen_addr, "Configuration loaded");
     tracing::info!(pairing_code = %config.pairing_code, quality = config.quality, fps = config.target_fps, "Server parameters");
 
+    // The QMP sidecar is a separate, loopback-only listener for the local GUI.
+    // It is optional: an unusable configuration (a bad port, a malformed VM
+    // list) must not stop the QUIC server from coming up.
+let sidecar = match continuum_transport::ws_sidecar::WsSidecar::from_env() {
+        Ok(sidecar) => {
+            // The sidecar injects keystrokes and pointer events into real
+            // guests, so clients must present this token before they get
+            // anything. Log it once: an operator cannot use the feature
+            // otherwise, and there is no interactive prompt here.
+            tracing::info!(
+                "QMP sidecar on ws://{}/ws/stream - auth token: {}",
+                sidecar.addr(),
+                sidecar.token(),
+            );
+            Some(sidecar)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "QMP sidecar disabled - GUI screen sharing unavailable");
+            None
+        }
+    };
+
     let shutdown = shutdown_signal();
 
     tokio::select! {
@@ -36,6 +58,19 @@ async fn main() -> Result<()> {
             if let Err(err) = result {
                 tracing::error!(error = %err, "Server error");
                 return Err(err);
+            }
+        }
+        result = async {
+            match sidecar {
+                Some(sidecar) => sidecar.serve().await,
+                // Nothing to serve; park so the select! still has a branch.
+                None => std::future::pending().await,
+            }
+        } => {
+            if let Err(err) = result {
+                // A sidecar failure is not fatal to remote desktop: log it and
+                // let the QUIC server carry on.
+                tracing::error!(error = %err, "QMP sidecar error");
             }
         }
         _ = shutdown => {

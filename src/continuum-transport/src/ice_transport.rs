@@ -248,6 +248,12 @@ async fn resolve_local_addrs() -> Vec<SocketAddr> {
     addrs
 }
 
+// async_trait expands each method into a #[must_use] box future, and the trait's
+// own async methods are already must_use. Clippy reads the pair as a redundant
+// attribute and, under the -D warnings that CI runs with, fails the build. The
+// duplication is in the macro's output, not in this source, so allowing the lint
+// here is the fix; there is nothing to rewrite.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait IceConnect: Send + Sync {
     async fn connect(&mut self, addr: SocketAddr) -> Result<IceState>;

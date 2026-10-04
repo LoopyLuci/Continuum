@@ -1538,6 +1538,7 @@ dependencies = [
  "bytes",
  "chrono",
  "clap",
+ "continuum-core",
  "continuum-observability",
  "continuum-security",
  "core-graphics 0.25.0",
