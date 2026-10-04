@@ -632,20 +632,22 @@ async fn handle_connection(
     match supplied {
         Some(key) if token_matches(&token, &key) => {}
         _ => {
-            let _ = out_tx.send(Outgoing::Text(
-                ServerMessage::Error {
-                    message: concat!(
-                        "authentication required: first message must be ",
-                        r#"{"type":"auth","key":"<token>"}"#,
-                    )
-                    .to_string(),
-                }
-                .encode(),
-            ));
-            // Drain the queue so the error is actually written before close.
-            while let Some(msg) = out_rx.recv().await {
-                let _ = msg;
+            // Written straight to the socket. The outgoing queue has no writer
+            // yet at this point -- the select! loop that forwards it starts
+            // below -- so queueing the error and returning leaves the client
+            // waiting for a message that is never sent.
+            let notice = ServerMessage::Error {
+                message: concat!(
+                    "authentication required: first message must be ",
+                    r#"{"type":"auth","key":"<token>"}"#,
+                )
+                .to_string(),
             }
+            .encode();
+            let _ = socket.send(axum::extract::ws::Message::Text(notice.into())).await;
+            let _ = socket
+                .send(axum::extract::ws::Message::Close(None))
+                .await;
             return;
         }
     }
