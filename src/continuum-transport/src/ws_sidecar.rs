@@ -245,6 +245,15 @@ impl ClientMessage {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
+    /// Acknowledges a successful `auth`.
+    ///
+    /// Required, not decorative. The GUI treats the connection as
+    /// unauthenticated until this arrives: it holds every config, subscribe and
+    /// input message in a queue and will not put one on the wire first. A server
+    /// that accepted the token but stayed silent left the client sitting on
+    /// "authenticating" forever, so both implementations must send this.
+    #[serde(rename = "auth_ok")]
+    AuthOk,
     #[serde(rename = "config_ack")]
     ConfigAck {
         quality: u8,
@@ -651,6 +660,10 @@ async fn handle_connection(
             return;
         }
     }
+
+    // Confirm the handshake before anything else. The GUI holds every message
+    // until this arrives, so omitting it leaves it stuck on "authenticating".
+    let _ = out_tx.send(Outgoing::Text(ServerMessage::AuthOk.encode()));
 
     // Announce the catalogue before anything is asked for, so a GUI can render
     // its VM picker without first having to guess a name.

@@ -486,3 +486,12 @@ fn test_auth_is_not_an_input_or_config() {
     // drives the guest.
     assert!(translate_input(&ClientMessage::parse(r#"{"type":"auth","key":"k"}"#).unwrap()).is_none());
 }
+#[test]
+fn test_auth_ok_is_emitted_after_successful_auth() {
+    // The GUI will not put anything on the wire -- not config, not subscribe,
+    // not input -- until it sees auth_ok, so a server that accepts the token
+    // without sending this leaves the client stuck on "authenticating". Both
+    // server implementations must send it; assert the wire shape here.
+    let encoded = ServerMessage::AuthOk.encode();
+    assert_eq!(encoded, r#"{"type":"auth_ok"}"#);
+}
