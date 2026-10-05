@@ -39,6 +39,8 @@ continuum-observability = { path = "../continuum-observability" }
 axum = { version = "0.8", features = ["ws"] }
 reqwest = { version = "0.12", features = ["json"] }
 async-trait = "0.1"
+des = "0.9"
+flate2 = "1"
 thiserror.workspace = true
 zeroize = "1"
 subtle = "2"

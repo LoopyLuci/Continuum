@@ -22,6 +22,7 @@ pub mod plugin;
 pub mod qr_code;
 pub mod qmp;
 pub mod recording;
+pub mod rfb;
 pub mod server;
 pub mod streaming_engine;
 pub mod tls;
