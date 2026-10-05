@@ -83,7 +83,7 @@ pub const DEFAULT_HEIGHT: u32 = 800;
 /// An `fps` of 10000 is a bug in the GUI, and honouring it would put a
 /// screendump on the wire per millisecond. Clamping turns that into a fast
 /// stream instead of a saturated one.
-pub const MAX_FPS: u32 = 60;
+pub const MAX_FPS: u32 = 120;
 
 /// How long a client has to present its auth message before being dropped.
 ///
