@@ -43,6 +43,15 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 image = { version = "0.25", features = ["jpeg", "png"] }
 thiserror = "2"
 
+# aurora-vnc integration (portable crates only)
+rfb-proto = { path = "C:/Projects/aurora-vnc-main/crates/rfb-proto", version = "0.1.0" }
+rfb-tls = { path = "C:/Projects/aurora-vnc-main/crates/rfb-tls", version = "0.1.0" }
+vnc-client = { path = "C:/Projects/aurora-vnc-main/crates/vnc-client", version = "0.1.0" }
+# vnc-host and gpu-ffi are Linux-only, disabled on Windows
+# vnc-host = { path = "C:/Projects/aurora-vnc-main/crates/vnc-host", version = "0.1.0", features = ["x11", "video"], default-features = false }
+# vnc-client = { path = "C:/Projects/aurora-vnc-main/crates/vnc-client", version = "0.1.0" }
+# gpu-ffi = { path = "C:/Projects/aurora-vnc-main/crates/gpu-ffi", version = "0.1.0" }
+
 [profile.release]
 opt-level = 3
 lto = true

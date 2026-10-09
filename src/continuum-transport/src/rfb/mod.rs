@@ -75,22 +75,23 @@
 //! caller wants `rfb::PixelFormat`, not `rfb::proto::PixelFormat`.
 
 pub mod auth;
+pub mod aurora_proto;
 pub mod encoder;
 pub mod proto;
 pub mod server;
 
 pub use auth::{generate_challenge, VncPassword, CHALLENGE_LEN, PASSWORD_LEN, RESPONSE_LEN};
-pub use encoder::{
-    all_contained, covers_most_of, full_frame, hextile_aligned, split_width, total_area,
-    write_copy_rect, write_desktop_size, ChangedRegion, Encoding, EncodingPreferences, Framebuffer,
-    Scroll, MAX_HEXTILE_TILE, MAX_RECTS_PER_UPDATE, MAX_TIGHT_RECT_WIDTH,
-};
 pub use proto::{
     decide_version, negotiate_security_type, parse_client_version, security_type_offer,
     ClientMessage, PixelFormat, Rect, SecurityType, ServerInit, VersionDecision,
     DEFAULT_DESKTOP_NAME, HIGHEST_SUPPORTED_VERSION, MAX_CLIENT_ENCODINGS, MAX_CUT_TEXT_BYTES,
     MAX_DESKTOP_NAME, SECURITY_INVALID, SECURITY_NONE, SECURITY_VNC_AUTH,
     SERVER_VERSION_BANNER, SUPPORTED_VERSIONS,
+};
+pub use encoder::{
+    all_contained, covers_most_of, full_frame, hextile_aligned, split_width, total_area,
+    write_copy_rect, write_desktop_size, ChangedRegion, Encoding, EncodingPreferences, Framebuffer,
+    Scroll, MAX_HEXTILE_TILE, MAX_RECTS_PER_UPDATE, MAX_TIGHT_RECT_WIDTH,
 };
 pub use server::{
     keysym_to_sendkey, RfbError, RfbServer, RfbServerConfig, DEFAULT_IDLE_TIMEOUT,

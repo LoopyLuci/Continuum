@@ -611,98 +611,7 @@ pub const CLIENT_MESSAGE_READ_LIMIT: usize = 64;
 /// checked against `buf`, so a truncated or hostile frame is an `Err` rather
 /// than a panic.
 pub fn decode_client_message(buf: &[u8]) -> Result<(ClientMessage, usize), RfbError> {
-    let Some(&message_type) = buf.first() else {
-        return Err(RfbError::Protocol("empty client message".into()));
-    };
-    let need = |n: usize| -> Result<(), RfbError> {
-        if buf.len() < n {
-            Err(RfbError::Protocol(format!(
-                "client message {message_type} was truncated: have {} bytes, need {n}",
-                buf.len()
-            )))
-        } else {
-            Ok(())
-        }
-    };
-
-    match message_type {
-        client_messages::SET_PIXEL_FORMAT => {
-            // 1 type byte, 3 padding bytes, then the 16-byte format.
-            need(20)?;
-            Ok((
-                ClientMessage::SetPixelFormat(PixelFormat::decode(&buf[4..20])?),
-                20,
-            ))
-        }
-        client_messages::SET_ENCODINGS => {
-            need(4)?;
-            let count = u16::from_be_bytes([buf[2], buf[3]]) as usize;
-            if count > MAX_CLIENT_ENCODINGS {
-                return Err(RfbError::Protocol(format!(
-                    "client advertised {count} encodings; this server accepts at most \
-                     {MAX_CLIENT_ENCODINGS}"
-                )));
-            }
-            let end = 4 + count * 4;
-            need(end)?;
-            let encodings = buf[4..end]
-                .chunks_exact(4)
-                .map(|c| i32::from_be_bytes([c[0], c[1], c[2], c[3]]))
-                .collect();
-            Ok((ClientMessage::SetEncodings { encodings }, end))
-        }
-        client_messages::FRAMEBUFFER_UPDATE_REQUEST => {
-            need(10)?;
-            Ok((
-                ClientMessage::FramebufferUpdateRequest {
-                    incremental: buf[1] != 0,
-                    x: u16::from_be_bytes([buf[2], buf[3]]),
-                    y: u16::from_be_bytes([buf[4], buf[5]]),
-                    width: u16::from_be_bytes([buf[6], buf[7]]),
-                    height: u16::from_be_bytes([buf[8], buf[9]]),
-                },
-                10,
-            ))
-        }
-        client_messages::KEY_EVENT => {
-            need(8)?;
-            Ok((
-                ClientMessage::KeyEvent {
-                    down: buf[1] != 0,
-                    keysym: u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]),
-                },
-                8,
-            ))
-        }
-        client_messages::POINTER_EVENT => {
-            need(6)?;
-            Ok((
-                ClientMessage::PointerEvent {
-                    x: u16::from_be_bytes([buf[2], buf[3]]),
-                    y: u16::from_be_bytes([buf[4], buf[5]]),
-                    mask: buf[1],
-                },
-                6,
-            ))
-        }
-        client_messages::CLIENT_CUT_TEXT => {
-            need(8)?;
-            let len = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]) as usize;
-            if len > MAX_CUT_TEXT_BYTES {
-                return Err(RfbError::Protocol(format!(
-                    "ClientCutText claimed {len} bytes; this server accepts at most \
-                     {MAX_CUT_TEXT_BYTES}"
-                )));
-            }
-            let end = 8 + len;
-            need(end)?;
-            // Lossy: the field is nominally Latin-1, and a guest clipboard
-            // holding UTF-8 should not be able to fail the whole message.
-            let text = String::from_utf8_lossy(&buf[8..end]).into_owned();
-            Ok((ClientMessage::ClientCutText { text }, end))
-        }
-        other => Err(RfbError::IgnoredMessage(other)),
-    }
+    super::aurora_proto::decode_client_message(buf)
 }
 
 /// Append a `FramebufferUpdate` header for `rect_count` rectangles.
@@ -1080,9 +989,30 @@ mod tests {
 
     #[test]
     fn an_unbounded_cut_text_length_is_rejected_before_allocating() {
-        let hostile = vec![6, 0, 0, 0, 0xff, 0xff, 0xff, 0xff];
+        // A classic ClientCutText declaring 2 GiB. The length is a *signed*
+        // 32-bit field (RFC 6143 7.5), so a large positive value is a classic
+        // cut text and must be refused against our 64 KiB cap.
+        let mut hostile = vec![6, 0, 0, 0];
+        hostile.extend_from_slice(&0x7fff_ffffu32.to_be_bytes());
         let err = decode_client_message(&hostile).unwrap_err().to_string();
         assert!(err.contains("ClientCutText"), "got: {err}");
+    }
+
+    #[test]
+    fn a_negative_cut_text_length_is_extended_clipboard_not_a_huge_classic_one() {
+        // 0xffffffff is i32 = -1: an Extended Clipboard body of *one* byte, not
+        // a 4 GiB cut text. An earlier hand-rolled parser read this field as
+        // u32 and rejected it as oversized; the RFC makes the field signed, so
+        // this is a legal (if useless) request that simply has no body here.
+        //
+        // The security property under test still holds: nothing is allocated on
+        // the peer's say-so. It is reported as a short read.
+        let hostile = vec![6, 0, 0, 0, 0xff, 0xff, 0xff, 0xff];
+        let err = decode_client_message(&hostile).unwrap_err();
+        assert!(
+            matches!(err, RfbError::Protocol(_)),
+            "expected a protocol error, got {err:?}"
+        );
     }
 
     #[test]

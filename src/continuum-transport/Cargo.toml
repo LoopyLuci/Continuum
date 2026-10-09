@@ -48,6 +48,13 @@ scrap = { version = "0.5", optional = true }
 core-graphics = { version = "0.25", optional = true }
 libxdo = { version = "0.6", optional = true }
 
+# aurora-vnc integration (portable crates only)
+rfb-proto.workspace = true
+rfb-tls.workspace = true
+# vnc-host.workspace = true  # Linux-only, disabled on Windows
+vnc-client.workspace = true
+# gpu-ffi.workspace = true  # Linux-only, disabled on Windows
+
 [features]
 default = ["platform-windows"]
 platform-windows = []
