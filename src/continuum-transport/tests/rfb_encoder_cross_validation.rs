@@ -43,6 +43,7 @@ use continuum_transport::rfb::encoder::{ChangedRegion, Framebuffer};
 use continuum_transport::rfb::proto::PixelFormat;
 use vnc_client::framebuffer::Framebuffer as AuroraFramebuffer;
 use vnc_client::classic::{decode_hextile, decode_rre, hextile_len};
+use vnc_client::tight::{payload_len, TightDecoder};
 use vnc_client::Rect as AuroraRect;
 
 /// 32bpp, depth 24, little-endian, 8 bits per channel — what QEMU offered the
@@ -269,6 +270,117 @@ fn continuum_hextile_handles_an_offset_region() {
 
     assert_eq!(out.pixels().to_vec(), expected, "offset region pixels differ");
 }
+
+// ── Tight ────────────────────────────────────────────────────────────────────
+
+/// Continuum's Tight encoder, decoded by aurora.
+///
+/// Tight is the encoding most likely to hide a framing bug of the kind this
+/// file exists to catch, for two reasons. Its control byte packs a compression
+/// method, a filter id and a stream-reset mask into one byte, so a field
+/// transposed there silently desynchronises everything after it. And it uses
+/// zlib streams that *persist across rectangles*, reset only when the control
+/// byte's low nibble says so — so a single-rectangle test proves very little
+/// and a multi-rectangle test is the one that matters.
+///
+/// Of QEMU's rectangles on the live guest, 29 used FillCompression, 13
+/// PaletteFilter and 5 CopyFilter, so the stream machinery is not hypothetical.
+#[test]
+fn continuum_tight_is_understood_by_aurora() {
+    for &(w, h, shape) in SHAPES {
+        let px = interesting_framebuffer(w, h);
+        let fb = continuum_fb(w, h, &px);
+        // Several rectangles down one frame, so a decoder that mishandles the
+        // persistent zlib streams fails on the second one rather than passing.
+        //
+        // The four regions must *tile* the frame exactly. Splitting at w/3 and
+        // h/3 leaves a remainder that is never encoded, and comparing the whole
+        // framebuffer against the source would then fail on untouched pixels --
+        // a test bug that looks exactly like an encoder bug.
+        let half_w = w / 2;
+        let half_h = h / 2;
+        let mut regions: Vec<ChangedRegion> = Vec::new();
+        for ry in [0u16, half_h] {
+            for rx in [0u16, half_w] {
+                regions.push(ChangedRegion {
+                    x: rx,
+                    y: ry,
+                    width: w - rx,
+                    height: h - ry,
+                });
+            }
+        }
+
+        let mut encodings: Vec<(AuroraRect, Vec<u8>)> = Vec::new();
+        for r in regions {
+            let mut payload = Vec::new();
+            fb.write_tight_payload(&mut payload, &r, &rgbx8888());
+            encodings.push((
+                AuroraRect { x: r.x, y: r.y, width: r.width, height: r.height },
+                payload,
+            ));
+        }
+
+        let mut out = AuroraFramebuffer::new(w, h);
+        // One decoder across the whole sequence, because that is the real usage
+        // and the only way the stream state is exercised.
+        let mut decoder = TightDecoder::default();
+        for (rect, payload) in encodings {
+            let expected = payload_len(&payload, &aurora_pf(), rect.width, rect.height)
+                .unwrap_or_else(|e| panic!("{shape}: aurora could not measure Tight: {e:?}"))
+                .unwrap_or_else(|| {
+                    panic!("{shape}: aurora's Tight walk ran short at ({},{})", rect.x, rect.y)
+                });
+            assert_eq!(
+                expected,
+                payload.len(),
+                "{shape}: Tight at ({},{}) should be {expected} bytes, got {}",
+                rect.x,
+                rect.y,
+                payload.len()
+            );
+            decoder
+                .decode(rect, &payload, &aurora_pf(), &[], &mut out)
+                .unwrap_or_else(|e| {
+                    panic!("{shape}: aurora rejected our Tight at ({},{}): {e:?}", rect.x, rect.y)
+                });
+        }
+        assert_eq!(out.pixels().to_vec(), px, "{shape}: pixels differ after Continuum -> aurora Tight");
+    }
+}
+
+// ── Raw ──────────────────────────────────────────────────────────────────────
+
+/// Continuum's Raw encoder, decoded by aurora.
+///
+/// Raw has no framing to get wrong beyond the pixel layout and byte order,
+/// which makes it the control: if this one fails, the failure is in the
+/// framebuffer plumbing rather than in an encoding's compression header.
+#[test]
+fn continuum_raw_is_understood_by_aurora() {
+    for &(w, h, shape) in SHAPES {
+        let px = interesting_framebuffer(w, h);
+        let fb = continuum_fb(w, h, &px);
+        let mut encoded = Vec::new();
+        fb.write_raw_payload(
+            &mut encoded,
+            &ChangedRegion { x: 0, y: 0, width: w, height: h },
+            &rgbx8888(),
+        );
+        assert_eq!(
+            encoded.len(),
+            w as usize * h as usize * 4,
+            "{shape}: Raw must be exactly width*height*4 bytes"
+        );
+
+        let wire = to_wire_rgbx(&px);
+        let mut out = AuroraFramebuffer::new(w, h);
+        let rect = AuroraRect { x: 0, y: 0, width: w, height: h };
+        out.put_raw(rect, &encoded, &aurora_pf(), &[]);
+        assert_eq!(out.pixels().to_vec(), px, "{shape}: pixels differ after Continuum -> aurora Raw");
+    }
+}
+
 
 // ── RRE ──────────────────────────────────────────────────────────────────────
 
