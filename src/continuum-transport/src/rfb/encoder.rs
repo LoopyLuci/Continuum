@@ -767,23 +767,37 @@ let mut candidate = None;
                     col += 1;
                     continue;
                 }
+                // An RRE sub-rectangle is a single flat colour, so the run has
+                // to be bounded by the colour *changing* as well as by the
+                // background. Stopping only at the background would collapse a
+                // whole run of varying colours into one rectangle carrying the
+                // first pixel's value, silently discarding every other pixel in
+                // it -- which is most of a desktop, where almost nothing is
+                // exactly the background colour.
+                let run = pixel_at(&self.pixels, stride, x + col, py);
                 let start = col;
-                while col < w && pixel_at(&self.pixels, stride, x + col, py) != background {
+                while col < w && pixel_at(&self.pixels, stride, x + col, py) == run {
                     col += 1;
                 }
-                subrects.push([start, py, col - start, 1]);
+                subrects.push([start, row, col - start, 1]);
             }
         }
 
         out.extend_from_slice(&(subrects.len() as u32).to_be_bytes());
         format.write_pixel(background, out);
         for [sx, sy, sw, sh] in subrects {
+            // RFC 6143 7.7.3: a sub-rectangle is the tuple
+            // <pixel-value, x-position, y-position, width, height> -- the colour
+            // comes *first*. Writing the geometry first desynchronises every
+            // real client while still round-tripping against a decoder that
+            // makes the same mistake, which is exactly what this file's own
+            // integration test used to do.
+            let colour = pixel_at(&self.pixels, stride, x + sx, y + sy);
+            format.write_pixel(colour, out);
             out.extend_from_slice(&sx.to_be_bytes());
             out.extend_from_slice(&sy.to_be_bytes());
             out.extend_from_slice(&sw.to_be_bytes());
             out.extend_from_slice(&sh.to_be_bytes());
-            let colour = pixel_at(&self.pixels, stride, x + sx, y + sy);
-            format.write_pixel(colour, out);
         }
     }
 
@@ -1591,11 +1605,12 @@ mod tests {
         let background = [out[4], out[5], out[6], out[7]];
         let mut canvas = vec![background; 8 * 8];
         for sub in out[8..].chunks_exact(12) {
-            let x = u16::from_be_bytes([sub[0], sub[1]]) as usize;
-            let y = u16::from_be_bytes([sub[2], sub[3]]) as usize;
-            let w = u16::from_be_bytes([sub[4], sub[5]]) as usize;
-            let h = u16::from_be_bytes([sub[6], sub[7]]) as usize;
-            let colour = [sub[8], sub[9], sub[10], sub[11]];
+            // RFC 6143 7.7.3: <pixel-value, x, y, width, height>.
+            let colour = [sub[0], sub[1], sub[2], sub[3]];
+            let x = u16::from_be_bytes([sub[4], sub[5]]) as usize;
+            let y = u16::from_be_bytes([sub[6], sub[7]]) as usize;
+            let w = u16::from_be_bytes([sub[8], sub[9]]) as usize;
+            let h = u16::from_be_bytes([sub[10], sub[11]]) as usize;
             for row in y..y + h {
                 for col in x..x + w {
                     canvas[row * 8 + col] = colour;
@@ -1628,9 +1643,11 @@ let expected: Vec<[u8; 4]> = (0..8)
         fb.write_rre_payload(&mut out, &full_frame(4, 4), &PixelFormat::BGRX32);
         let count = u32::from_be_bytes(out[..4].try_into().unwrap()) as usize;
         assert_eq!(count, 1);
-        assert_eq!(&out[8..12], &[0, 3, 0, 1], "x=3, y=1");
-        assert_eq!(&out[12..16], &[0, 1, 0, 1], "w=1, h=1");
-        assert_eq!(&out[16..20], &[255, 0, 0, 255], "and its colour");
+        assert_eq!(&out[8..12], &[255, 0, 0, 255], "the colour, which comes first");
+        assert_eq!(&out[12..14], &[0, 3], "x=3");
+        assert_eq!(&out[14..16], &[0, 1], "y=1");
+        assert_eq!(&out[16..18], &[0, 1], "w=1");
+        assert_eq!(&out[18..20], &[0, 1], "h=1");
     }
 
     // ── Tight ─────────────────────────────────────────────────────────────

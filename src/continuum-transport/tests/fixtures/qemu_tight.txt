@@ -1,0 +1,85 @@
+qemu_7.bin - real Tight payloads from a live QEMU VNC server
+============================================================================
+
+WHY THIS FILE EXISTS
+A Hextile decoder once read the sub-encoding byte as sequential ids
+0,1,2,3,4 instead of the flag mask 0x01,0x02,0x04,0x08,0x10. 261 tests
+passed, because every fixture had been generated from that decoder's own
+assumptions; nothing had ever compared against bytes a real server sent.
+This file is bytes a real server put on the wire.
+
+PROVENANCE - read this before treating it as a corpus
+This is ONE screen, from ONE guest, at ONE moment. It is a regression
+fixture, not a corpus. It covers 48 Tight rectangle(s) of a single
+full-screen update. It does NOT cover incremental damage updates,
+multi-rectangle updates, edge tiles on a resolution that is not a
+multiple of 16, cursor pseudo-encodings, other pixel formats, other
+guests, or any other server. One real-world sample is a regression guard,
+not evidence of general coverage. Re-capturing will produce different
+bytes, because the guest's screen is not the same twice.
+
+CAPTURED
+date              : 2026-10-09 17:51:53 UTC
+server            : QEMU, VNC on 127.0.0.1:6000
+desktop name      : QEMU (omarchy)
+resolution        : 1280x800
+security          : None (RFC 6143 security type 1, no password)
+client            : aurora-vnc vnc-client, via an in-process recording proxy
+
+ENCODINGS REQUESTED (SetEncodings, in this order)
+7    Tight, listed first so the server prefers it
+0    Raw, mandatory per RFC 6143 7.7.1, present as the fallback
+Every rectangle stored below is encoding 7; the capture aborts if
+the server sends anything else, so the file cannot silently fill with
+the wrong encoding.
+
+PIXEL FORMAT
+Requested by the client with SetPixelFormat, not left to the server
+default:
+bits-per-pixel   : 32
+depth            : 24
+big-endian-flag  : 0
+true-colour-flag : 1
+red/green/blue max   : 255/255/255
+red/green/blue shift : 16/8/0
+Four little-endian bytes per pixel in B, G, R, x order - byte-identical
+to Continuum's PixelFormat::BGRX32 and aurora's PixelFormat::RGBX8888_LE.
+
+FILE LAYOUT (all integers big-endian)
+0        magic      4 bytes  "CVF1"
+4        count      u16      number of rectangles
+6        rectangles count x ( x:u16 y:u16 w:u16 h:u16 len:u32 payload:len )
+trailer  width     u32      1280
+trailer  height    u32      800
+`payload` is the rectangle's encoding payload only, with no 12-byte
+rectangle header, matching what a decoder is handed after parsing the
+header out of a FramebufferUpdate.
+
+SIZE
+rectangles        : 48
+payload bytes     : 3293
+file bytes        : 3883
+
+CAPTURE TOOL
+continuum-transport/examples/capture_vnc_fixture.rs. Read-only: it sends
+SetPixelFormat, SetEncodings and non-incremental
+FramebufferUpdateRequest messages and nothing else. It never sends a
+key, pointer, clipboard, resize or shutdown message, and never touches
+QMP.
+
+The client half is aurora-vnc's vnc-client rather than a hand-rolled
+RFC 6143 implementation. A hand-rolled client written for this task
+completed the handshake against this QEMU but never received an update
+once it had sent SetEncodings, while aurora's received one immediately;
+the raw bytes are therefore taken through an in-process recording proxy
+spliced in front of the server, and cut out of the recording with
+aurora's own hextile_len / payload_len so the framing used to capture is
+the framing the fixture is replayed through.
+
+Before writing, the tool replays the extracted rectangles through
+aurora's decoder and checks the result is pixel-identical to the frame
+the client had already built, so a mis-cut rectangle cannot be checked
+in.
+
+Incidental during this session: 0 Bell, 0
+SetColourMapEntries, 0 ServerCutText message(s) were skipped.

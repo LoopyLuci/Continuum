@@ -388,11 +388,13 @@ stream.write_all(&[1]).await?;
         for _ in 0..count {
             let sub = self.read_exact_bytes(12).await?;
             total += 12;
-            let x = u16::from_be_bytes([sub[0], sub[1]]);
-            let y = u16::from_be_bytes([sub[2], sub[3]]);
-            let w = u16::from_be_bytes([sub[4], sub[5]]);
-            let h = u16::from_be_bytes([sub[6], sub[7]]);
-            let colour = [sub[8], sub[9], sub[10], sub[11]];
+            // RFC 6143 7.7.3: a sub-rectangle is the tuple <v, x, y, w, h>, so
+            // the pixel value comes *before* the four U16 geometry fields.
+            let colour = [sub[0], sub[1], sub[2], sub[3]];
+            let x = u16::from_be_bytes([sub[4], sub[5]]);
+            let y = u16::from_be_bytes([sub[6], sub[7]]);
+            let w = u16::from_be_bytes([sub[8], sub[9]]);
+            let h = u16::from_be_bytes([sub[10], sub[11]]);
             self.fill(rect.x + x, rect.y + y, w, h, colour);
         }
         Some(4 + total)
