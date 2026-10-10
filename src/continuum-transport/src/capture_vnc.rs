@@ -224,6 +224,26 @@ impl VncCaptureBackend {
         })
     }
 
+    /// The next frame, or `None` when the guest has not changed.
+    ///
+    /// This is the form consumers should prefer over
+    /// [`CaptureBackend::capture_frame`]. RFB is silent while a desktop is
+    /// unchanged, and `None` is that: the common case, not a failure. A caller
+    /// that receives `None` should send nothing, because re-encoding and
+    /// resending an unchanged screen is precisely the cost this backend exists
+    /// to remove.
+    ///
+    /// Never blocks.
+    pub fn try_capture(&mut self, monitor_id: u32) -> ContinuumResult<Option<CapturedFrame>> {
+        if monitor_id != 0 {
+            return Err(ContinuumError::Capture(format!(
+                "VM {} has one display; monitor {monitor_id} does not exist",
+                self.vm_name
+            )));
+        }
+        Ok(self.slot.peek())
+    }
+
     pub fn quality(&self) -> u8 {
         self.quality
     }
