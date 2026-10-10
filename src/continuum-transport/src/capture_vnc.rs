@@ -54,9 +54,6 @@ use std::time::{Duration, Instant};
 use continuum_core::capture::{CaptureBackend, CapturedFrame, MonitorInfo};
 use continuum_core::{ContinuumError, ContinuumResult};
 
-/// Transcode quality when a caller does not say.
-const DEFAULT_QUALITY: u8 = 80;
-
 /// How long the default RFB port is derived from the QMP display number.
 ///
 /// QEMU's `-vnc 127.0.0.1:100` is a *display* number and the TCP port is
@@ -234,7 +231,7 @@ impl VncCaptureBackend {
     /// to remove.
     ///
     /// Never blocks.
-    pub fn try_capture(&mut self, monitor_id: u32) -> ContinuumResult<Option<CapturedFrame>> {
+    pub fn try_capture(&self, monitor_id: u32) -> ContinuumResult<Option<CapturedFrame>> {
         if monitor_id != 0 {
             return Err(ContinuumError::Capture(format!(
                 "VM {} has one display; monitor {monitor_id} does not exist",
@@ -242,6 +239,27 @@ impl VncCaptureBackend {
             )));
         }
         Ok(self.slot.peek())
+    }
+
+    /// Wait up to `timeout` for the guest to send real pixels.
+    ///
+    /// The blocking trait form, for a caller that has no way to express "the
+    /// desktop is unchanged". It waits for the *next* frame rather than
+    /// re-sending the last one: a consumer that receives a frame expects it to
+    /// be new, and repeating an unchanged screen is the cost this backend
+    /// exists to avoid.
+    ///
+    /// Errors only when the reader thread has died; an idle desktop is a
+    /// timeout, not a failure.
+    pub fn wait_for_frame(&self, timeout: Duration) -> ContinuumResult<CapturedFrame> {
+        match self.slot.take(timeout) {
+            Ok(Some(frame)) => Ok(frame),
+            Ok(None) => Err(ContinuumError::Capture(format!(
+                "no RFB update for {} within {timeout:?}; the desktop is idle",
+                self.vm_name
+            ))),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn quality(&self) -> u8 {
