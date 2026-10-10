@@ -150,8 +150,12 @@ impl CaptureSource {
     /// consumer. On the RFB path it waits for the guest to actually send an
     /// update rather than resending the last frame: a consumer that receives a
     /// frame expects it to be new.
-    pub async fn capture_jpeg(&mut self) -> ContinuumResult<EncodedFrame> {
-        match &mut self.video {
+    ///
+    /// Takes `&self` so a frame loop can hold an `Arc<CaptureSource>` and clone
+    /// it per tick. Both underlying sources are `&self` -- the RFB slot is
+    /// internally synchronised, and QMP's screendump serialises internally.
+    pub async fn capture_jpeg(&self) -> ContinuumResult<EncodedFrame> {
+        match &self.video {
             VideoSource::Vnc(vnc) => {
                 let frame = vnc.wait_for_frame(WAIT_FOR_PIXELS)?;
                 Ok(EncodedFrame {
@@ -163,6 +167,21 @@ impl CaptureSource {
             }
             VideoSource::Qmp => self.input.capture_jpeg().await,
         }
+    }
+
+    /// Build a source around an existing QMP backend, with video on QMP.
+    ///
+    /// For callers that already hold a connected QMP client — tests, and any
+    /// embedder managing its own connection — so they do not have to connect
+    /// twice just to end up on the fallback path.
+    pub fn with_qmp(input: QmpCaptureBackend) -> Self {
+        Self::with_shared_qmp(Arc::new(input))
+    }
+
+    /// As [`CaptureSource::with_qmp`], for a caller that already shares one
+    /// QMP backend between consumers.
+    pub fn with_shared_qmp(input: Arc<QmpCaptureBackend>) -> Self {
+        Self { input, video: VideoSource::Qmp }
     }
 
     /// The QMP client input events are injected through.
@@ -178,6 +197,20 @@ impl CaptureSource {
         match self.video {
             VideoSource::Vnc(_) => "vnc",
             VideoSource::Qmp => "qmp",
+        }
+    }
+
+    /// The geometry frames arrive at.
+    ///
+    /// The *configured* size, matching both backends, because QMP exposes no
+    /// query for a VM's actual display resolution and the RFB handshake's
+    /// geometry is the same negotiated value. Bound-checking a framebuffer
+    /// against this before allocating is what stops a peer asking for one
+    /// larger than the cap.
+    pub fn geometry(&self) -> (u32, u32) {
+        match &self.video {
+            VideoSource::Vnc(vnc) => vnc.geometry(),
+            VideoSource::Qmp => (self.input.width(), self.input.height()),
         }
     }
 }

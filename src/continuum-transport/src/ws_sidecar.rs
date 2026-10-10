@@ -63,6 +63,7 @@ use serde::{Deserialize, Serialize};
 use continuum_core::input::RemoteInputEvent;
 
 use crate::capture_qmp::QmpCaptureBackend;
+use crate::capture_source::CaptureSource;
 use crate::input_qmp::QmpInputInjector;
 
 /// Default listen port. Overridable with `CONTINUUM_SIDECAR_PORT`.
@@ -445,7 +446,7 @@ impl StreamStats {
 /// Per-connection mutable state.
 struct Session {
     vm: Option<String>,
-    backend: Option<Arc<QmpCaptureBackend>>,
+    backend: Option<Arc<CaptureSource>>,
     injector: Option<Arc<QmpInputInjector>>,
     quality: u8,
     fps: u32,
@@ -932,8 +933,21 @@ async fn attach_vm(
         ))];
     };
 
-    let backend = match QmpCaptureBackend::connect(&target.name, target.qmp_addr).await {
-        Ok(backend) => Arc::new(backend.with_format(session.quality, session.width, session.height)),
+    // RFB for frames where the VM has a VNC display, QMP screendump otherwise.
+    // Input stays on QMP either way, which is why this is one type rather than
+    // a choice between two. The decision is made once, here: probing per frame
+    // would retry a refused RFB connect on every frame for a VM launched
+    // without -vnc, which is a real configuration.
+    let (source, fell_back) = match CaptureSource::connect(
+        &target.name,
+        target.qmp_addr,
+        session.quality,
+        session.width,
+        session.height,
+    )
+    .await
+    {
+        Ok(pair) => (Arc::new(pair.0), pair.1),
         Err(e) => {
             session.reset_backend();
             return vec![ServerMessage::error(format!(
@@ -942,17 +956,23 @@ async fn attach_vm(
             ))];
         }
     };
+    if let Some(reason) = fell_back {
+        // Not an error: a VM launched without -vnc is working as intended on
+        // the slower path, and saying so at warn level would train the log to
+        // be ignored.
+        tracing::info!("{vm}: {reason}");
+    }
 
     let injector = Arc::new(
         QmpInputInjector::new(
             &target.name,
-            Arc::clone(backend.client()),
+            source.client(),
             target.tablet_device.clone(),
         )
         .with_guest_size(session.width, session.height),
     );
 
-    session.backend = Some(backend);
+    session.backend = Some(source);
     session.injector = Some(injector);
     session.vm = Some(vm.to_string());
     tracing::info!(vm = %vm, addr = %target.qmp_addr, "sidecar attached to VM");

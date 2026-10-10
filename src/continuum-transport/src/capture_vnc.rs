@@ -262,6 +262,16 @@ impl VncCaptureBackend {
         }
     }
 
+    /// The geometry frames arrive at.
+    ///
+    /// The *configured* size rather than the handshake's, so a caller
+    /// bound-checking before allocating sees the same numbers it will get back
+    /// from a frame and cannot be surprised by a guest that negotiates
+    /// something else.
+    pub fn geometry(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     pub fn quality(&self) -> u8 {
         self.quality
     }

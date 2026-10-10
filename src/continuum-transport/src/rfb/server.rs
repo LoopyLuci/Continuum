@@ -57,7 +57,7 @@ use tokio::time::timeout;
 
 use continuum_core::input::{InputAction, ModifierKeys, MouseButton, RemoteInputEvent};
 
-use crate::capture_qmp::QmpCaptureBackend;
+use crate::capture_source::CaptureSource;
 use crate::input_qmp::{control_key, key_for, resolve_sendkey, QmpInputInjector};
 
 use crate::rfb::auth::{generate_challenge, VncPassword, RESPONSE_LEN};
@@ -318,7 +318,7 @@ impl AdmissionSlots {
 /// State shared by every client of one guest.
 struct Shared {
     config: RfbServerConfig,
-    capture: Arc<QmpCaptureBackend>,
+    capture: Arc<CaptureSource>,
     injector: Arc<QmpInputInjector>,
     frames: broadcast::Sender<Arc<Framebuffer>>,
     slots: AdmissionSlots,
@@ -353,7 +353,7 @@ impl RfbServer {
     /// Build a server around an already-connected capture backend and injector.
     pub fn new(
         config: RfbServerConfig,
-        capture: Arc<QmpCaptureBackend>,
+        capture: Arc<CaptureSource>,
         injector: Arc<QmpInputInjector>,
     ) -> Self {
         let (frames, _) = broadcast::channel(FRAME_CHANNEL_DEPTH);
@@ -884,8 +884,8 @@ async fn verify_vnc_auth(
 
 /// Derive the framebuffer geometry the capture backend will produce, enforcing
 /// every bound before a single byte of it is allocated.
-fn framebuffer_geometry(capture: &QmpCaptureBackend) -> Result<(u16, u16), RfbError> {
-    let (width, height) = (capture.width(), capture.height());
+fn framebuffer_geometry(capture: &CaptureSource) -> Result<(u16, u16), RfbError> {
+    let (width, height) = capture.geometry();
     let too_large = || RfbError::FramebufferTooLarge {
         width,
         height,

@@ -18,6 +18,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use continuum_transport::capture_qmp::QmpCaptureBackend;
+use continuum_transport::capture_source::CaptureSource;
 use continuum_transport::input_qmp::QmpInputInjector;
 use continuum_transport::rfb::{
     generate_challenge, RfbServer, RfbServerConfig, VncPassword, CHALLENGE_LEN, RESPONSE_LEN,
@@ -142,7 +143,7 @@ async fn start_server(qmp_addr: std::net::SocketAddr, config: RfbServerConfig) -
         QmpInputInjector::new("win11", Arc::clone(capture.client()), Some("tablet0".into()))
             .with_guest_size(64, 48),
     );
-    let server = RfbServer::new(config, capture, injector);
+    let server = RfbServer::new(config, Arc::new(CaptureSource::with_shared_qmp(capture)), injector);
     let listener = server.bind().await.unwrap();
     let addr = listener.local_addr().unwrap();
     let serving = server.clone();
@@ -816,7 +817,7 @@ async fn input_events_reach_the_guest_over_qmp() {
         QmpInputInjector::new("win11", Arc::clone(capture.client()), Some("tablet0".into()))
             .with_guest_size(32, 32),
     );
-    let server = RfbServer::new(secure_config(), capture, injector);
+    let server = RfbServer::new(secure_config(), Arc::new(CaptureSource::with_shared_qmp(capture)), injector);
     let listener = server.bind().await.unwrap();
     let addr = listener.local_addr().unwrap();
     let serving = server.clone();
