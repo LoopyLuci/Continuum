@@ -857,6 +857,39 @@ let mut candidate = None;
     /// (zlib stream 0), bit 6 clear (no filter-id byte, therefore CopyFilter),
     /// and bit 0 set so the decoder resets stream 0 before inflating — which is
     /// what makes a fresh complete zlib stream per rectangle correct.
+    ///
+    /// # Why this is not `rfb_proto::encodings::TightEncoder`
+    ///
+    /// That encoder is the more capable one — fill, copy, palette and gradient
+    /// filters — and the fill filter is a genuine win: it turns a uniform screen
+    /// from 3,001 bytes into 4, where zlib alone cannot get a million
+    /// identical bytes much below a few hundred.
+    ///
+    /// It was tried, and it does not fit here, for a reason worth recording
+    /// precisely because it is easy to get wrong.
+    ///
+    /// `TightEncoder` holds four zlib streams that persist **across
+    /// rectangles**, which is correct Tight: a connection has one set of
+    /// streams, and its control byte leaves the "reset this stream" bit clear
+    /// because nothing needs resetting. This function builds a fresh payload
+    /// per rectangle and sets bit 0 so each one is complete and self-contained,
+    /// decodable anywhere.
+    ///
+    /// Point a per-rectangle payload at a stateful encoder and the second
+    /// rectangle in a message arrives carrying a continuation stream the
+    /// decoder has no state for. `rfb_encoder_cross_validation.rs` fails on
+    /// that second rectangle with "zlib: deflate decompression error".
+    ///
+    /// The single-rectangle case passes, which is the trap: it looks correct
+    /// until an update happens to contain more than one rectangle, which is
+    /// every wide or damaged frame — so it would have shipped as an
+    /// intermittent failure in the field rather than a test failure here.
+    ///
+    /// So adopting it means holding an encoder per client session for the life
+    /// of the connection, mirroring how the decoder already behaves. That is a
+    /// real change to `ClientState` and worth doing deliberately, not as a side
+    /// effect of removing a duplicate. Until then this stays Continuum's, and
+    /// stays validated against real QEMU-captured Tight fixtures.
     pub fn write_tight_payload(&self, out: &mut Vec<u8>, region: &ChangedRegion, format: &PixelFormat) {
         const CONTROL: u8 = 0x01;
 

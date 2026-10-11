@@ -39,7 +39,6 @@ continuum-observability = { path = "../continuum-observability" }
 axum = { version = "0.8", features = ["ws"] }
 reqwest = { version = "0.12", features = ["json"] }
 async-trait = "0.1"
-des = "0.9"
 flate2 = "1"
 thiserror.workspace = true
 zeroize = "1"
@@ -50,8 +49,19 @@ libxdo = { version = "0.6", optional = true }
 
 # aurora-vnc integration (portable crates only)
 rfb-proto.workspace = true
-rfb-tls.workspace = true
-# vnc-host.workspace = true  # Linux-only, disabled on Windows
+# rfb-tls is deliberately not a direct dependency.
+#
+# It is still linked, transitively, through `vnc-client` -- so the capture
+# client can complete a VeNCrypt/TLS handshake against a server that offers one,
+# and it refuses to continue in the clear if a server does. Declaring it here as
+# well was dead weight: nothing in Continuum names `rfb_tls`, so the direct edge
+# bought nothing and would have kept looking like TLS support this server does
+# not have. Adding it back is the first step of giving the RFB server VeNCrypt,
+# which is a feature rather than an integration.
+#
+# vnc-host and gpu-ffi stay out: both are Linux-only (mmap, SysV shared memory,
+# memfd sealing, `std::os::unix`), and this builds on Windows.
+# vnc-host.workspace = true
 vnc-client.workspace = true
 # gpu-ffi.workspace = true  # Linux-only, disabled on Windows
 

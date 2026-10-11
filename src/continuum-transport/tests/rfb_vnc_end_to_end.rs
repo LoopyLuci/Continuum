@@ -165,7 +165,26 @@ async fn a_live_guest_streams_over_rfb_not_the_fallback() {
     // variation and a plausible mean.
     let nonblack = pixels.iter().filter(|&&p| p & 0x00FF_FFFF != 0).count();
     let total = pixels.len();
-let mean: u64 = pixels.iter().map(|&p| (p & 0xFF) as u64).sum::<u64>() / total as u64;
+// Luminance, not one channel.
+    //
+    // This took the low byte of each 0x00RRGGBB pixel, which is *blue*, while
+    // the ground truth below is a proper grayscale mean. The two agreed closely
+    // enough on the greeter's near-grey desktop to look correct, and then
+    // disagreed by 45 on a blue-tinted desktop -- two runs, identical numbers,
+    // which is what made it obvious this was a fixed error rather than a
+    // changing screen. Two quantities with different names were being compared
+    // and the tolerance was doing the hiding.
+    //
+    // Weighted the same way as the `image` crate's `to_luma8`, so the two sides
+    // mean the same thing by construction rather than by coincidence.
+    let mean: u64 = pixels
+        .iter()
+        .map(|&p| {
+            let (r, g, b) = ((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+            ((299 * r + 587 * g + 114 * b) / 1000) as u64
+        })
+        .sum::<u64>()
+        / total as u64;
 
     // Compare against ground truth from the *other* capture path rather than
     // against an assumption about what the guest should be showing.

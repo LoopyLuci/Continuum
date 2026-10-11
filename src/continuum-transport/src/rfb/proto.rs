@@ -95,49 +95,12 @@ pub enum VersionDecision {
 /// a version negotiation failure: there is no sensible default to fall back
 /// to, and guessing means speaking a dialect the client does not expect.
 pub fn parse_client_version(buf: &[u8]) -> Result<u16, RfbError> {
-    if buf.len() != 12 {
-        return Err(RfbError::Protocol(format!(
-            "version line was {} bytes, expected 12",
-            buf.len()
-        )));
+    // Delegated: validating a version banner is protocol, not policy, and
+    // `rfb-proto` is the authority on it. Continuum's version of this walked
+    // the twelve bytes itself and produced its own diagnostics -- a second
+    // parser that could disagree about what counts as a well-formed banner.
+        super::aurora_proto::parse_client_version(buf)
     }
-    if &buf[..4] != b"RFB " {
-        return Err(RfbError::Protocol("version line did not start with \"RFB \"".into()));
-    }
-    // "RFB xxx.yyy\n": the major version is bytes 4..7, the minor is 8..11, and
-    // byte 7 is the separator.
-    let major_part = &buf[4..7];
-    let minor_part = &buf[8..11];
-    if buf[7] != b'.' {
-        return Err(RfbError::Protocol(format!(
-            "version number {:?} was not xxx.yyy",
-            String::from_utf8_lossy(&buf[4..11])
-        )));
-    }
-    for part in [major_part, minor_part] {
-        if part.iter().any(|b| !b.is_ascii_digit()) {
-            return Err(RfbError::Protocol(format!(
-                "version number {:?} was not digits",
-                String::from_utf8_lossy(&buf[4..11])
-            )));
-        }
-    }
-    let parse = |part: &[u8]| -> Result<u16, RfbError> {
-        std::str::from_utf8(part)
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .ok_or_else(|| RfbError::Protocol("could not parse the version number".into()))
-    };
-    let major: u16 = parse(major_part)?;
-    let minor: u16 = parse(minor_part)?;
-    let newline = buf[11];
-    if newline != b'\n' && newline != 0 {
-        return Err(RfbError::Protocol(format!(
-            "version line ended with {newline:#04x}, expected a newline"
-        )));
-    }
-    Ok(major * 100 + minor)
-}
 
 /// Decide what to do about a version the client announced.
 pub fn decide_version(client: u16) -> Result<VersionDecision, RfbError> {
@@ -432,14 +395,21 @@ pub struct ServerInit {
 
 impl ServerInit {
     pub fn encode(&self) -> Vec<u8> {
-        let name = self.name.as_bytes();
-        let name = &name[..name.len().min(MAX_DESKTOP_NAME)];
+        // Truncating the desktop name stays here: it is a Continuum cap, not a
+        // protocol rule, and `rfb-proto` writes whatever name it is handed.
+        let bytes = self.name.as_bytes();
+        let name =
+            String::from_utf8_lossy(&bytes[..bytes.len().min(MAX_DESKTOP_NAME)]).into_owned();
         let mut out = Vec::with_capacity(24 + name.len());
-        out.extend_from_slice(&self.width.to_be_bytes());
-        out.extend_from_slice(&self.height.to_be_bytes());
-        out.extend_from_slice(&self.pixel_format.encode());
-        out.extend_from_slice(&(name.len() as u32).to_be_bytes());
-        out.extend_from_slice(name);
+        super::aurora_proto::write_server_init(
+            &mut out,
+            &ServerInit {
+                width: self.width,
+                height: self.height,
+                pixel_format: self.pixel_format.clone(),
+                name,
+            },
+        );
         out
     }
 
@@ -469,18 +439,14 @@ impl ServerInit {
 
 impl PixelFormat {
     pub fn encode(&self) -> [u8; 16] {
-        let mut out = [0u8; 16];
-        out[0] = self.bits_per_pixel;
-        out[1] = self.depth;
-        out[2] = u8::from(self.big_endian);
-        out[3] = u8::from(self.true_colour);
-        out[4..6].copy_from_slice(&self.red_max.to_be_bytes());
-        out[6..8].copy_from_slice(&self.green_max.to_be_bytes());
-        out[8..10].copy_from_slice(&self.blue_max.to_be_bytes());
-        out[10] = self.red_shift;
-        out[11] = self.green_shift;
-        out[12] = self.blue_shift;
-        out
+        // Delegated: `rfb-proto` owns the sixteen-byte pixel format of
+        // RFC 6143 §7.4, and Continuum's copy was a second place for the shifts
+        // and maxima to disagree.
+        let mut out = Vec::with_capacity(16);
+        super::aurora_proto::to_aurora_pixel_format(self).encode(&mut out);
+        let mut fixed = [0u8; 16];
+        fixed.copy_from_slice(&out);
+        fixed
     }
 
     pub fn decode(buf: &[u8]) -> Result<Self, RfbError> {
@@ -528,11 +494,8 @@ impl Rect {
     }
 
     pub fn write_header(&self, out: &mut Vec<u8>) {
-        out.extend_from_slice(&self.x.to_be_bytes());
-        out.extend_from_slice(&self.y.to_be_bytes());
-        out.extend_from_slice(&self.width.to_be_bytes());
-        out.extend_from_slice(&self.height.to_be_bytes());
-        out.extend_from_slice(&self.encoding.to_be_bytes());
+    // Delegated: see `aurora_proto::write_rect_header`.
+        super::aurora_proto::write_rect_header(out, self);
     }
 }
 
@@ -616,9 +579,7 @@ pub fn decode_client_message(buf: &[u8]) -> Result<(ClientMessage, usize), RfbEr
 
 /// Append a `FramebufferUpdate` header for `rect_count` rectangles.
 pub fn write_framebuffer_update_header(out: &mut Vec<u8>, rect_count: u16) {
-    out.push(server_messages::FRAMEBUFFER_UPDATE);
-    out.push(0); // padding
-    out.extend_from_slice(&rect_count.to_be_bytes());
+    super::aurora_proto::write_framebuffer_update_header(out, rect_count);
 }
 
 /// Append a `SecurityResult`. The reason string is only sent on failure, and

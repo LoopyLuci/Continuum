@@ -28,6 +28,39 @@
 //! The conversions are total and infallible in the direction that matters:
 //! `rfb-proto` rejects a pixel format it cannot represent before it ever
 //! reaches a conversion, and a server desktop name is ASCII by RFC 6143.
+//!
+//! # What is delegated, and what is not
+//!
+//! Every byte Continuum puts on, or takes off, the wire now comes from
+//! `rfb-proto`:
+//!
+//! | Concern | Owner |
+//! |---|---|
+//! | Client message parsing | `rfb-proto`, via [`decode_client_message`] |
+//! | Version banner parsing | `rfb-proto`, via [`parse_client_version`] |
+//! | `PixelFormat` / `ServerInit` bytes | `rfb-proto`, via [`write_server_init`] |
+//! | Rectangle headers | `rfb-proto`, via [`write_rect_header`] |
+//! | `FramebufferUpdate` header | `rfb-proto`, via [`write_framebuffer_update_header`] |
+//! | VNC authentication DES | `rfb_proto::auth` — see [`super::auth`] |
+//!
+//! What Continuum keeps is policy, not format: which versions it will speak
+//! ([`super::proto::decide_version`], which refuses 3.4–3.6), and the
+//! anti-downgrade guard in [`super::proto::negotiate_security_type`], which
+//! refuses a client offering only unauthenticated access. Neither is expressible
+//! through `rfb-proto`'s helpers, and both are decisions about what this server
+//! will accept rather than about what the bytes look like.
+//!
+//! # The encoders are a separate question
+//!
+//! The *encoder* half of `rfb-proto` is not adopted, and the reasons are
+//! measured rather than assumed. `rfb-proto`'s RRE emits one sub-rectangle per
+//! differing pixel, which costs 158x a run-length encoder on flat panels.
+//! Its Hextile places foreground pixels at their compacted index, so it
+//! corrupts any tile with a background pixel before a foreground one. Its
+//! Tight keeps zlib streams alive across rectangles, which does not fit a
+//! server that emits self-contained per-rectangle payloads. Each is pinned by
+//! a test in `tests/rfb_proto_encoder_defect.rs` or documented at the call
+//! site, so revisiting the decision needs new evidence rather than a hunch.
 
 use rfb_proto::codec::{DecodeError, Limits, PutBe};
 use rfb_proto::messages::ClientMessage as AuroraClientMessage;
@@ -90,17 +123,28 @@ fn decode_err(e: DecodeError) -> RfbError {
 
 /// Parse a 12-byte `ProtocolVersion` into `major*100 + minor`.
 ///
-/// Delegates to `rfb-proto`. Note the deliberate difference in strictness:
-/// `rfb-proto` *clamps* a peer that offers something newer than 3.8 down to
-/// the 3.8 message rules rather than rejecting it, because a 3.889 client
-/// speaks the 3.8 handshake. Continuum's [`super::proto::decide_version`] is
-/// what decides whether to clamp or to ask the peer to retry, so this returns
-/// the peer's literal numbers and leaves the policy to the caller.
+/// This is the live path: `proto::parse_client_version` delegates here, so there
+/// is one definition of a well-formed banner and it is `rfb-proto`'s rather than
+/// a second one written alongside it.
+///
+/// It returns the peer's *literal* numbers. Clamping -- answering 3.8 to a
+/// client that offered 4.1 -- is a separate decision that stays in
+/// [`super::proto::decide_version`], and the split is deliberate:
+/// `rfb-proto` clamps because a 3.889 client speaks the 3.8 handshake, while
+/// Continuum additionally refuses 3.4 to 3.6 outright, because those were never
+/// implemented and saying so beats speaking a dialect nobody wrote.
+#[must_use]
 pub fn parse_client_version(buf: &[u8]) -> Result<u16, RfbError> {
     // `rfb-proto` only returns the clamped variant, so re-read the raw
     // digits to report what the peer actually said. Clamping is a *message
     // rule* decision, not something to lose the peer's number over.
-    if buf.len() < AuroraVersion::WIRE_LEN {
+    //
+    // The length is compared for *equality*, not "at least": a version banner
+    // is a fixed twelve bytes, and a client that sends more has desynchronised
+    // already. Being lenient here would mean reading the next message's bytes
+    // as part of this one, which is exactly the class of bug that produced
+    // earlier wire-format defects.
+    if buf.len() != AuroraVersion::WIRE_LEN {
         return Err(RfbError::Protocol(format!(
             "version line was {} bytes, expected {}",
             buf.len(),
@@ -411,17 +455,6 @@ pub fn decode_client_message(buf: &[u8]) -> Result<(ClientMessage, usize), RfbEr
 /// type without depending on `rfb-proto` directly.
 pub use rfb_proto::messages::ServerMessage as AuroraServerMessage;
 
-/// Encode a `ServerMessage` into `out` using `rfb-proto`'s writer.
-///
-/// Used for the framebuffer-update header so the server and the client agree
-/// on one writer, not two hand-maintained ones.
-pub fn write_server_message(msg: &AuroraServerMessage, out: &mut Vec<u8>) -> Result<(), RfbError> {
-    // `ServerMessage::encode` is infallible by construction; it only ever
-    // appends to a Vec.
-    msg.encode(out);
-    Ok(())
-}
-
 /// Write a `SecurityResult` with `rfb-proto`'s field writer.
 ///
 /// RFC 6143 7.1.3: the field is a `u32` that is **0 on success** and non-zero
@@ -459,6 +492,55 @@ pub fn rect(x: u16, y: u16, width: u16, height: u16, encoding: i32) -> Rect {
         height,
         encoding,
     }
+}
+
+/// Append a rectangle header, delegating the wire layout to `rfb-proto`.
+///
+/// Twelve bytes, written once per rectangle in every frame, with nothing
+/// Continuum-specific about them. Hand-rolling that here is exactly how the
+/// RRE defect happened: the sub-rectangle field order was wrong, and the
+/// encoder agreed with the decoder because both were built from the same
+/// mistaken assumption. There is no reason for Continuum to hold an opinion
+/// about field order in a structure `rfb-proto` already owns.
+pub fn write_rect_header(out: &mut Vec<u8>, rect: &Rect) {
+    use rfb_proto::messages::RectHeader;
+    RectHeader {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        // `from_code` keeps unrecognised numbers as `Other`, so an encoding
+        // Continuum has never heard of still reaches the wire unchanged rather
+        // than being coerced into something else.
+        encoding: rfb_proto::types::Encoding::from_code(rect.encoding),
+    }
+    .encode(out);
+}
+
+/// Append a `FramebufferUpdate` message header.
+///
+/// `rfb_proto`'s `ServerMessage::encode` writes the whole header for the
+/// variant it is given -- message type, padding and rectangle count -- so
+/// nothing is written here beyond the call. An earlier version of this also
+/// pushed a message-type byte, on the assumption that the variant implied it
+/// the way `RectHeader::encoding` implies the encoding. It does not, and the
+/// duplicate byte showed up as every frame one byte longer than the test
+/// expected.
+pub fn write_framebuffer_update_header(out: &mut Vec<u8>, rect_count: u16) {
+    use rfb_proto::messages::ServerMessage;
+    ServerMessage::FramebufferUpdate {
+        num_rects: rect_count,
+    }
+    .encode(out);
+}
+
+/// Append a `ServerInit`, delegating the layout to `rfb-proto`.
+///
+/// The desktop name is passed in already truncated, because that cap is
+/// Continuum's policy rather than a rule of the protocol, and `rfb-proto`
+/// writes whatever name it is handed.
+pub fn write_server_init(out: &mut Vec<u8>, init: &ServerInit) {
+    to_aurora_server_init(init).encode(out);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
