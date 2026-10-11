@@ -1,4 +1,4 @@
-use crate::candidate::{IceCandidate, IceCandidatePair, IceCandidateType, CandidatePairState};
+use crate::candidate::{IceCandidate, IceCandidatePair, CandidatePairState};
 use crate::stun::{StunMessage, StunClass};
 use std::net::SocketAddr;
 use std::time::Duration;

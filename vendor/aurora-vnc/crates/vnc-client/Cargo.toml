@@ -1,0 +1,23 @@
+[package]
+name = "vnc-client"
+description = "Aurora VNC viewer: sans-I/O client session, framebuffer, and a blocking TCP driver."
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+rust-version = "1.85"
+
+[lib]
+name = "vnc_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vnc-client"
+path = "src/main.rs"
+
+[dependencies]
+rfb-proto = { path = "../rfb-proto", version = "0.1.0" }
+rfb-tls = { path = "../rfb-tls", version = "0.1.0" }
+# Pure-Rust zlib (miniz_oxide) for ZRLE: no C toolchain, portable everywhere.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# Pure-Rust JPEG decoding for Tight (TigerVNC, x11vnc and TightVNC use it for photos and video).
+zune-jpeg = "0.4"

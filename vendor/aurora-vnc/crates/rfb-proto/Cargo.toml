@@ -1,0 +1,17 @@
+[package]
+name = "rfb-proto"
+description = "RFB / RFC 6143 protocol core: sans-I/O handshakes, message codecs, encoders and reference decoders."
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+rust-version = "1.85"
+
+[dependencies]
+des = "0.8"
+miniz_oxide = "0.9"
+
+# The upstream `interop` dev-dependency is dropped: it drives TigerVNC's Xvnc
+# and x11vnc over Xvfb, so it is Linux/X11-only and would break
+# `cargo test --workspace` on the Windows runner CI uses. The interop tests it
+# backed are removed with it; conformance against real third-party servers is
+# driven from Continuum's side instead.

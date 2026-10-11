@@ -10,6 +10,12 @@ members = [
   "src/continuum-security",
   "src/relay-server",
   "src/continuum-ci", "src/continuum-ice", "src/continuum-discovery", "src/continuum-codec", "src/continuum-session", "src/continuum-performance", "src/continuum-testing", "src/continuum-ui", "src/continuum-web", "src/continuum-mobile", "src/continuum-enterprise", "src/continuum-plugins",
+  # The portable crates of aurora-vnc, vendored so this is one self-contained
+  # build rather than a program that only compiles when one particular checkout
+  # sits at one particular absolute path. See vendor/aurora-vnc/README.md.
+  "vendor/aurora-vnc/crates/rfb-proto",
+  "vendor/aurora-vnc/crates/rfb-tls",
+  "vendor/aurora-vnc/crates/vnc-client",
 ]
 default-members = [
   "src/continuum-transport",
@@ -43,14 +49,32 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 image = { version = "0.25", features = ["jpeg", "png"] }
 thiserror = "2"
 
-# aurora-vnc integration (portable crates only)
-rfb-proto = { path = "C:/Projects/aurora-vnc-main/crates/rfb-proto", version = "0.1.0" }
-rfb-tls = { path = "C:/Projects/aurora-vnc-main/crates/rfb-tls", version = "0.1.0" }
-vnc-client = { path = "C:/Projects/aurora-vnc-main/crates/vnc-client", version = "0.1.0" }
-# vnc-host and gpu-ffi are Linux-only, disabled on Windows
-# vnc-host = { path = "C:/Projects/aurora-vnc-main/crates/vnc-host", version = "0.1.0", features = ["x11", "video"], default-features = false }
-# vnc-client = { path = "C:/Projects/aurora-vnc-main/crates/vnc-client", version = "0.1.0" }
-# gpu-ffi = { path = "C:/Projects/aurora-vnc-main/crates/gpu-ffi", version = "0.1.0" }
+# aurora-vnc integration.
+#
+# These were absolute paths into C:/Projects/aurora-vnc-main. A hard-coded
+# location on one machine is not a dependency: it cannot resolve on a CI
+# runner, on another checkout, or after a move, so the integration existed only
+# where it was made. The portable crates are vendored under vendor/aurora-vnc
+# and are now ordinary workspace members -- one build, one test run, no network.
+rfb-proto = { path = "vendor/aurora-vnc/crates/rfb-proto", version = "0.1.0" }
+rfb-tls = { path = "vendor/aurora-vnc/crates/rfb-tls", version = "0.1.0" }
+vnc-client = { path = "vendor/aurora-vnc/crates/vnc-client", version = "0.1.0" }
+
+# Not vendored, and not omitted by accident:
+#
+# * `vnc-host` and `gpu-ffi` cannot build on Windows at all. `gpu-ffi` is mmap,
+#   SysV shared memory and memfd sealing; `vnc-host` has no `cfg(target_os)`
+#   attributes whatsoever and depends on `gpu-ffi` unconditionally, so it is
+#   Linux-only by construction. Continuum is the RFB *server*, so `vnc-host`
+#   would duplicate this crate rather than extend it.
+# * `vnc-viewer` is a `[[bin]]` with no `[lib]`, so it exposes no API to
+#   consume; it is a GUI front end for the client `vnc-client` already provides.
+# * `interop` is `publish = false` and drives x11vnc/TigerVNC over Xvfb. Its
+#   value here is its recorded transcripts against real servers, which are
+#   vendored under vendor/aurora-vnc/crates/interop/vectors and replayed by
+#   rfb-proto's own tests.
+# * Aurora Video (`rfb_proto::video`) is an extension only a host can originate;
+#   Continuum is the server, and the encoder lives in `vnc-host`.
 
 [profile.release]
 opt-level = 3

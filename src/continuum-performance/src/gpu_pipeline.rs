@@ -47,6 +47,15 @@ pub struct PipelineStats {
 
 /// GPU pipeline placeholder (platform-specific)
 pub struct GpuPipeline {
+    // Retained, and deliberately unread.
+    //
+    // Every method below is a no-op, so there is nothing yet for a
+    // `PipelineConfig` to influence. Keeping the field says the configuration
+    // is part of this type's intended shape; dropping it would make the
+    // constructor's argument look meaningless instead. The annotation is here so
+    // that "unread" is a stated fact about a placeholder rather than an
+    // oversight for whoever writes the real pipeline.
+    #[allow(dead_code)]
     config: PipelineConfig,
     stats: PipelineStats,
 }

@@ -97,16 +97,17 @@ pub struct EncoderCapabilities {
 
 /// Software JPEG encoder
 pub struct JpegEncoder {
-    config: EncoderConfig,
+    // Only `quality` is honoured. The struct used to keep the whole
+    // `EncoderConfig` alongside it, which read as though `codec_type`, `fps`,
+    // `bitrate_kbps` and the configured dimensions were all in force when none
+    // of them are consulted: JPEG quality is the only one of those that changes
+    // the bytes this produces, and the geometry comes from the frame.
     quality: u8,
 }
 
 impl JpegEncoder {
     pub fn new(config: EncoderConfig) -> Self {
-        Self {
-            quality: config.quality,
-            config,
-        }
+        Self { quality: config.quality }
     }
 }
 
@@ -157,12 +158,14 @@ impl VideoEncoder for JpegEncoder {
 
 /// Software JPEG decoder
 pub struct JpegDecoder {
-    config: DecoderConfig,
+    // Kept for symmetry with `JpegEncoder`, and for the same reason the
+    // encoder's unused copy was dropped: a `DecoderConfig` field that nothing
+    // reads documents an influence the decoder does not have.
 }
 
 impl JpegDecoder {
-    pub fn new(config: DecoderConfig) -> Self {
-        Self { config }
+    pub fn new(_config: DecoderConfig) -> Self {
+        Self {}
     }
 }
 

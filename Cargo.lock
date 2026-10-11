@@ -6040,6 +6040,7 @@ dependencies = [
  "rfb-proto",
  "ring",
  "rustls",
+ "rustls-native-certs",
 ]
 
 [[package]]

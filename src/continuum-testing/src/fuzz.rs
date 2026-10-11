@@ -1,3 +1,4 @@
+use rand::SeedableRng;
 use rand::Rng;
 use std::time::{Duration, Instant};
 
@@ -31,7 +32,13 @@ impl FuzzHarness {
     {
         let start = Instant::now();
         let mut failures = 0;
-        let mut rng = rand::thread_rng();
+        // Seeded from `self.seed`, not `thread_rng`.
+        //
+        // A fuzz harness whose seed is stored and then ignored cannot reproduce
+        // a failure: the seed is the only handle on which input caused it, and
+        // this throws that handle away. It is also the reason `seed` existed
+        // and was never read.
+        let mut rng = rand::rngs::StdRng::seed_from_u64(self.seed);
 
         for _ in 0..self.iterations {
             let len = rng.gen_range(1..=1024);
