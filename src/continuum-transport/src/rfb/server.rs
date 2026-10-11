@@ -321,6 +321,17 @@ struct Shared {
     capture: Arc<CaptureSource>,
     injector: Arc<QmpInputInjector>,
     frames: broadcast::Sender<Arc<Framebuffer>>,
+    /// The most recent captured frame, kept so a client that connects later can
+    /// be brought up to date immediately.
+    ///
+    /// The broadcast channel alone is not enough: it only delivers to
+    /// subscribers that were present when a frame was sent. A viewer joining
+    /// after the last capture would wait for the next one, and on a still
+    /// desktop the next one never comes -- so it would show a blank screen
+    /// indefinitely while the server was perfectly healthy. That is a real
+    /// failure, not an edge case: "open the console and see nothing" is what
+    /// a user sees on a VM that is simply idle.
+    latest: std::sync::Mutex<Option<Arc<Framebuffer>>>,
     slots: AdmissionSlots,
     captures: AtomicU64,
 }
@@ -364,6 +375,7 @@ impl RfbServer {
                 capture,
                 injector,
                 frames,
+                latest: std::sync::Mutex::new(None),
                 slots,
                 captures: AtomicU64::new(0),
             }),
@@ -464,8 +476,15 @@ async fn capture_loop(shared: Arc<Shared>) {
                     let height = clamp_dimension(frame.height);
                     match Framebuffer::from_bgra32(width, height, pixels) {
                         Ok(frame) => {
+                            let frame = Arc::new(frame);
+                            // Record before broadcasting: a client that
+                            // subscribes in between would otherwise miss the
+                            // only frame an idle desktop will ever produce.
+                            if let Ok(mut slot) = shared.latest.lock() {
+                                *slot = Some(Arc::clone(&frame));
+                            }
                             // A send error only means nobody is listening.
-                            let _ = shared.frames.send(Arc::new(frame));
+                            let _ = shared.frames.send(frame);
                             shared.captures.fetch_add(1, Ordering::Relaxed);
                         }
                         Err(e) => tracing::warn!(error = %e, "captured frame did not match its size"),
@@ -525,6 +544,13 @@ struct ClientState {
     /// An outstanding request. RFB updates are demand-driven, so nothing is sent
     /// until the client asks.
     pending: Option<PendingRequest>,
+    /// Whether this client has been given the current screen on arrival.
+    ///
+    /// A client that connects after the capture loop published a frame would
+    /// otherwise wait for the *next* one, and on a desktop that has stopped
+    /// changing there is no next one -- so it would sit on a blank screen for
+    /// ever. `Shared::latest` is what makes arrival independent of timing.
+    seeded: bool,
 }
 
 /// A `FramebufferUpdateRequest`, clipped to the framebuffer before use.
@@ -608,6 +634,7 @@ async fn handle_client(
         // Nothing has been sent yet, so the client holds nothing.
         needs_full_refresh: Arc::new(AtomicBool::new(true)),
         pending: None,
+        seeded: false,
     };
 
     let (out_tx, out_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(shared.config.write_queue_depth);
@@ -944,6 +971,14 @@ async fn session_loop(
                 match frame {
                     Ok(frame) => {
                         if let Some(update) = build_update(state, &frame) {
+                            // This client now holds a real frame, so it must
+                            // never be seeded from `latest` later. Without this
+                            // the flag only recorded frames delivered by seeding,
+                            // and a client whose first frame came from the
+                            // broadcast looked unseeded on its next request --
+                            // so an unchanged desktop produced a full update it
+                            // did not need, and an incremental one became full.
+                            state.seeded = true;
                             // `try_send`, never `send`: a full queue means this
                             // client is slower than the desktop. Dropping the frame
                             // costs it one resynchronisation; blocking here would
@@ -1100,6 +1135,33 @@ fn handle_client_message(
         } => {
             if !incremental {
                 state.needs_full_refresh.store(true, Ordering::Release);
+            }
+            // Bring a newly arrived client up to the current screen before it
+            // waits on the broadcast channel. Without this, a viewer that
+            // connects after the last capture is not sent that frame -- the
+            // channel only reaches current subscribers -- and on a desktop that
+            // has stopped changing nothing further is ever published, so the
+            // client waits indefinitely for an update that will not come.
+            if !state.seeded {
+                let current = shared
+                    .latest
+                    .lock()
+                    .ok()
+                    .and_then(|slot| slot.clone());
+                if let Some(frame) = current {
+                    if state.view.width() != frame.width()
+                        || state.view.height() != frame.height()
+                    {
+                        state.view.resize(frame.width(), frame.height());
+                    }
+                    state.view.copy_from(&frame);
+                    state.needs_full_refresh.store(true, Ordering::Release);
+                    // Only now. Marking it seeded when no frame existed yet
+                    // would permanently skip seeding for a client that asked
+                    // during the very first capture -- which is exactly when a
+                    // viewer opened right after launch arrives.
+                    state.seeded = true;
+                }
             }
             // A new request supersedes an outstanding one: it is at least as
             // fresh, and honouring both would send the same damage twice.
@@ -2165,6 +2227,7 @@ mod tests {
             preferences: EncodingPreferences::new(&[]),
             needs_full_refresh: Arc::new(AtomicBool::new(true)),
             pending: None,
+            seeded: false,
         }
     }
 

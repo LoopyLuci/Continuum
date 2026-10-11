@@ -108,11 +108,19 @@ impl FrameSlot {
         }
     }
 
-    fn publish(&self, frame: CapturedFrame) {
+    /// Publish a frame. Returns whether the slot was empty, i.e. whether the
+    /// previous frame had been taken.
+    ///
+    /// False means the consumer is behind and this frame is already stale --
+    /// a queue would hand it a backlog of out-of-date frames, so the slot is
+    /// latest-wins by design.
+    fn publish(&self, frame: CapturedFrame) -> bool {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let was_empty = state.frame.is_none();
         state.frame = Some(frame);
         drop(state);
         self.ready.notify_all();
+        was_empty
     }
 
     fn fail(&self, message: String) {
@@ -295,47 +303,104 @@ fn read_loop(
     quality: u8,
     vm_name: &str,
 ) {
-    // One non-incremental request up front so the first frame is the whole
-    // desktop rather than a diff against an unknown baseline. `pump_once`
-    // re-requests incrementally thereafter, which is what makes an unchanged
-    // desktop free.
-    let mut deadline = Instant::now() + READ_TIMEOUT;
-    loop {
-        let events = match connection.pump_once(deadline) {
-            Ok(events) => events,
-            // A timeout is the *idle* case, not a dead one. RFB has no
-            // keepalive, so an unchanged desktop legitimately sends nothing at
-            // all; treating that as fatal tears the session down on a screen
-            // that is merely still, which is most of the time on a console.
-            //
-            // Only a genuine failure ends the loop.
-            Err(vnc_client::net::NetError::Timeout) => continue,
-            Err(e) => {
-                slot.fail(format!("RFB session for {vm_name} ended: {e}"));
-                return;
-            }
-        };
-        // Extend the deadline only once an event has actually arrived, so an
-        // idle guest does not spin on a deadline that never moves.
-        if !events.is_empty() {
-            deadline = Instant::now() + READ_TIMEOUT;
-        }
-        for event in events {
-            if !matches!(event, vnc_client::Event::Updated { .. }) {
-                continue;
-            }
-            let framebuffer = connection.session.framebuffer();
-            let (w, h) = (framebuffer.width() as usize, framebuffer.height() as usize);
-            let rgb = rgb_from_framebuffer(framebuffer);
-            match encode_jpeg(&rgb, w, h, quality) {
-                Ok(jpeg) => slot.publish(CapturedFrame::new(w as u32, h as u32, jpeg, 0)),
+        // One non-incremental request up front so the first frame is the whole
+        // desktop rather than a diff against an unknown baseline.
+        //
+        // After that, every read re-requests. RFB is request/response, not
+        // push: the guest sends a framebuffer update *only* in answer to a
+        // FramebufferUpdateRequest, and `pump_once` does not send one itself.
+        // Without a re-request the server sends the first frame and then nothing
+        // for ever, so a "damage-only" backend silently delivers exactly one
+        // frame and looks like a path that is simply slow. Measured before
+        // this was fixed: 1 frame in 10 seconds while the guest was being
+        // actively redrawn.
+        // No re-request is issued here, and that is deliberate.
+        //
+        // An earlier version of this loop asserted that `pump_once`
+        // "re-requests incrementally thereafter". It does not -- `pump_once`
+        // only reads -- so the comment was wrong, and a reader who believed it
+        // would add a re-request to "fix" a stall that could not have been
+        // caused by that.
+        //
+        // The fix it prompted was worse than the bug. `SessionOptions`
+        // already defaults `continuous_updates: true`, which issues the next
+        // incremental request after each complete update, so exactly one
+        // request is outstanding at every moment after the handshake. Adding
+        // another on each read leaves two pending; the server answers both
+        // with identical pixels, and the reader then encodes and publishes the
+        // same frame twice -- the redundant re-encode this backend exists to
+        // eliminate. Measured on the wire: 2 requests outstanding on an idle
+        // desktop with the re-request, 1 without.
+        //
+        // `rfb_update_request_discipline.rs` asserts that count so this cannot
+        // regress silently, and so the next person to "fix" the stall measures
+        // before changing anything.
+        let mut deadline = Instant::now() + READ_TIMEOUT;
+        loop {
+            let events = match connection.pump_once(deadline) {
+                Ok(events) => events,
+                // A timeout is the *idle* case, not a dead one. RFB has no
+                // keepalive, so an unchanged desktop legitimately sends nothing
+                // at all; treating that as fatal tears the session down on a
+                // screen that is merely still, which is most of the time on a
+                // console. The pending request stays outstanding across this,
+                // which is exactly why nothing needs to be sent here.
+                Err(vnc_client::net::NetError::Timeout) => {
+                    deadline = Instant::now() + READ_TIMEOUT;
+                    continue;
+                }
                 Err(e) => {
-                    slot.fail(format!("JPEG encode for {vm_name} failed: {e}"));
+                    slot.fail(format!("RFB session for {vm_name} ended: {e}"));
                     return;
+                }
+            };
+            // Extend the deadline only once an event has actually arrived, so an
+            // idle guest does not spin on a deadline that never moves.
+            if !events.is_empty() {
+                deadline = Instant::now() + READ_TIMEOUT;
+            }
+for event in &events {
+                if !matches!(event, vnc_client::Event::Updated { .. }) {
+                    continue;
+                }
+                // `Updated` does not mean pixels arrived. A FramebufferUpdate
+                // carrying only a pseudo-encoding -- a size change, or the
+                // cursor shape TightVNC sends first -- completes as an update
+                // and leaves the framebuffer untouched, so encoding it yields
+                // a perfectly valid JPEG of a black screen.
+                //
+                // QEMU sends exactly that as its first update, which made this
+                // backend hand out a black first frame to every client: the
+                // E2E test's client read a framebuffer with mean luminance 0
+                // while a QMP screendump of the same guest measured 39.8. The
+                // second frame was correct, so it looks like a race and is not
+                // one -- the first update genuinely never contained an image.
+                //
+                // `has_pixels` is the session's own record of whether any
+                // pixels have been decoded, so this asks rather than guessing
+                // (a legitimately black guest is still black once painted).
+                if !connection.session.has_pixels() {
+                    continue;
+                }
+                let framebuffer = connection.session.framebuffer();
+                let (w, h) = (framebuffer.width() as usize, framebuffer.height() as usize);
+                let rgb = rgb_from_framebuffer(framebuffer);
+                match encode_jpeg(&rgb, w, h, quality) {
+                    // `publish` reports whether the slot was free, i.e. whether
+                    // the previous frame had been taken. False means this frame
+                    // is already stale, which is exactly what `try_capture`
+                    // reports as "no new pixels" rather than handing out a
+                    // backlog of out-of-date frames.
+                    Ok(jpeg) => {
+                        slot.publish(CapturedFrame::new(w as u32, h as u32, jpeg, 0));
+                    }
+                    Err(e) => {
+                        slot.fail(format!("JPEG encode for {vm_name} failed: {e}"));
+                        return;
+                    }
                 }
             }
         }
-    }
 }
 
 /// Convert aurora's 0x00RRGGBB framebuffer into packed RGB for the JPEG

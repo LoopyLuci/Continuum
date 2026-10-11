@@ -132,13 +132,22 @@ fn to_wire_rgbx(px: &[u32]) -> Vec<u8> {
     out
 }
 
-/// aurora's decoded bytes back into u32 for comparison.
-fn from_wire_rgbx(bytes: &[u8]) -> Vec<u32> {
-    bytes
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect()
-}
+// There is deliberately no `from_wire_rgbx` helper, even though it is the
+// obvious inverse of `to_wire_rgbx` and a synthetic encoder/decoder round trip
+// is the shape this file could most easily have grown.
+//
+// It would not be worth having. Every round trip here would feed Continuum's
+// encoder into aurora's decoder and back again, which tests only that two
+// pieces of code agree with each other -- the exact failure this project has
+// hit three times (a Hextile decoder validated against its own fixtures, an
+// RRE encoder and decoder sharing one misreading of the sub-rectangle order,
+// and RFB wiring verified only on the fallback path).
+//
+// The direction that actually needed proving is proven against something
+// outside this repository instead: `rfb_vnc_end_to_end.rs` drives real QEMU,
+// decodes what QEMU encodes, and compares the pixels against an independent
+// QMP `screendump` of the same guest. That covers decode against a foreign
+// encoder, which no amount of round tripping can.
 
 /// Shapes worth testing: aligned to the 16x16 Hextile tile, and deliberately
 /// not, so the last tile row and column are clipped. A decoder that mishandles
@@ -373,7 +382,6 @@ fn continuum_raw_is_understood_by_aurora() {
             "{shape}: Raw must be exactly width*height*4 bytes"
         );
 
-        let wire = to_wire_rgbx(&px);
         let mut out = AuroraFramebuffer::new(w, h);
         let rect = AuroraRect { x: 0, y: 0, width: w, height: h };
         out.put_raw(rect, &encoded, &aurora_pf(), &[]);

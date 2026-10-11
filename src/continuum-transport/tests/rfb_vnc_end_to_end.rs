@@ -59,14 +59,29 @@ async fn guest_is_reachable() -> bool {
         && std::net::TcpStream::connect_timeout(&qmp(), Duration::from_millis(750)).is_ok()
 }
 
+/// Serialises the tests in this binary, because QEMU's QMP endpoint accepts
+/// **one client at a time**.
+///
+/// Without this the two tests race: one binds QMP and the other's connect is
+/// refused with `os error 10061`, which looks exactly like "the guest is not
+/// running" and reports as a failure. It also made the results depend on
+/// scheduling -- the pair passed reliably with `--test-threads=1` and failed in
+/// the full suite, which is the worst kind of flake because it looks like the
+/// guest is unstable.
+///
+/// A skip is only honest if it means the guest is absent, so the tests take a
+/// turn rather than tolerating a refusal.
+static QMP_SLOT: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// A frame arriving over the wire has to contain actual screen content.
 ///
 /// An all-black frame is what a decoder produces when it gives up: the socket
 /// is connected, the handshake completes, and nothing is drawn. Asserting on
 /// byte *length* alone would pass for that, so the pixels themselves are
 /// checked.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_live_guest_streams_over_rfb_not_the_fallback() {
+    let _slot = QMP_SLOT.lock().await;
     if !guest_is_reachable().await {
         eprintln!(
             "SKIPPED: no guest on QMP 4444 and VNC display {VNC_DISPLAY}; \
@@ -88,6 +103,8 @@ async fn a_live_guest_streams_over_rfb_not_the_fallback() {
     );
     assert_eq!(source.name(), "vnc", "video source must be RFB");
 
+    // Captured before `source` is moved into the server below.
+    let qmp_client = source.client();
     let injector = Arc::new(
         QmpInputInjector::new("omarchy", source.client(), None).with_guest_size(1280, 800),
     );
@@ -148,21 +165,72 @@ async fn a_live_guest_streams_over_rfb_not_the_fallback() {
     // variation and a plausible mean.
     let nonblack = pixels.iter().filter(|&&p| p & 0x00FF_FFFF != 0).count();
     let total = pixels.len();
-    let mean: u64 = pixels.iter().map(|&p| (p & 0xFF) as u64).sum::<u64>() / total as u64;
+let mean: u64 = pixels.iter().map(|&p| (p & 0xFF) as u64).sum::<u64>() / total as u64;
 
+    // Compare against ground truth from the *other* capture path rather than
+    // against an assumption about what the guest should be showing.
+    //
+    // The earlier version of this test asserted the frame was not black, on the
+    // reasoning that a decoder which gives up leaves every pixel zero. That
+    // reasoning silently assumed the guest runs a graphical session. It does
+    // not: booted headless, Omarchy sits at a serial login prompt with a black
+    // framebuffer, and the test failed on a perfectly correct capture -- which
+    // is a test that asserts the environment rather than the code.
+    //
+    // Asking QEMU what the screen actually contains fixes that. Both paths
+    // read the same framebuffer at the same moment, so they must agree, and a
+    // decoder that gave up now disagrees with QMP instead of with a hardcoded
+    // expectation. It is also a stronger check: it validates the RFB path
+    // against an independent source of truth rather than against "not black".
+    let truth = qmp_screendump_mean(&qmp_client).await;
+    let tolerance = 12i64;
     assert!(
-        nonblack as f64 / total as f64 > 0.5,
-        "frame is {}% black; a blank frame means the decoder never drew",
-        100 * (total - nonblack) / total
+        (mean as i64 - truth).abs() <= tolerance,
+        "RFB frame mean {mean} disagrees with the QMP screendump mean {truth} \
+         by more than {tolerance}; the two read the same framebuffer, so one \
+         of them is wrong"
     );
-    assert!(
-        (10..=250).contains(&mean),
-        "mean channel {mean} is not a plausible screen luminance"
-    );
+
+    // The desktop may legitimately be black, but it must not be *structurally*
+    // empty: a real frame always has the guest's geometry and a decode that
+    // produced something. Uniformity is only suspicious next to a non-black
+    // truth, which the comparison above already covers.
     eprintln!(
-        "OK: {width}x{height} over RFB from a live guest, {:.1}% non-black, mean {mean}",
+        "OK: {width}x{height} over RFB from a live guest, {:.1}% non-black, \
+         mean {mean} (QMP screendump mean {truth})",
         100.0 * nonblack as f64 / total as f64
     );
+}
+
+/// Mean luminance of a QMP `screendump`, used as ground truth for the RFB path.
+///
+/// Goes through the same QMP client `CaptureSource` already holds. Opening a
+/// second one is not an option: QEMU's QMP endpoint serves one client at a
+/// time, and a second connect is refused -- which is also why the two tests in
+/// this file take turns via `QMP_SLOT`.
+async fn qmp_screendump_mean(client: &std::sync::Arc<continuum_transport::qmp::QmpClient>) -> i64 {
+    let path = std::env::temp_dir().join(format!(
+        "continuum-rfb-truth-{}-{}.png",
+        std::process::id(),
+        qmp().port()
+    ));
+    let request = serde_json::json!({ "filename": path.to_string_lossy() });
+    client
+        .execute("screendump", request.into())
+        .await
+        .expect("QMP screendump for ground truth");
+
+    let bytes = tokio::fs::read(&path)
+        .await
+        .unwrap_or_else(|e| panic!("reading screendump at {}: {e}", path.display()));
+    let _ = tokio::fs::remove_file(&path).await;
+
+    let image = image::load_from_memory(&bytes)
+        .unwrap_or_else(|e| panic!("screendump is not a decodable image: {e}"))
+        .to_luma8();
+    let pixels = image.as_raw();
+    let sum: u64 = pixels.iter().map(|&p| p as u64).sum();
+    (sum / pixels.len().max(1) as u64) as i64
 }
 
 /// The fallback is a real configuration, so it gets tested as one.
@@ -171,40 +239,77 @@ async fn a_live_guest_streams_over_rfb_not_the_fallback() {
 /// for any reason, `CaptureSource` must produce a working QMP source rather
 /// than erroring — otherwise adding `-vnc` to a launcher becomes a way to
 /// break streaming rather than to speed it up.
-#[tokio::test]
+///
+/// # Why this previously proved nothing
+///
+/// The earlier version of this test called `CaptureSource::connect`, which
+/// hardcoded the real RFB port. So it did not test the fallback at all: with a
+/// guest running it silently took the **VNC** path and asserted that input
+/// worked, which is true of both paths. It passed either way, and a green suite
+/// implied the fallback was covered when it had never been executed.
+///
+/// `connect_at` now takes the RFB endpoint as a parameter, so pointing it at a
+/// closed port actually forces the branch under test.
+#[tokio::test(flavor = "multi_thread")]
 async fn a_guest_without_a_vnc_display_still_streams() {
-    // Point at a display nothing is listening on. QMP is real, so this is a
-    // guest with no VNC endpoint -- exactly the configuration under test.
+    let _slot = QMP_SLOT.lock().await;
+    // A display nothing is listening on, so the RFB connect must fail. QMP is
+    // real, making this exactly the configuration under test: a live guest
+    // with no VNC endpoint.
     let dead_display = std::net::SocketAddr::from((
         [127, 0, 0, 1],
         continuum_transport::vnc_port(VNC_DISPLAY + 90),
     ));
-    std::net::TcpStream::connect_timeout(&dead_display, Duration::from_millis(200)).ok();
 
-    let source = match CaptureSource::connect("omarchy", qmp(), 85, 64, 48).await {
-        Ok((source, reason)) => {
-            // RFB may or may not be up on this host; either way the source
-            // must be usable and input must work.
-            let _ = reason;
-            source
-        }
-        Err(e) => {
-            eprintln!("SKIPPED: no guest on QMP 4444: {e}");
-            return;
-        }
-    };
+    let (source, reason) =
+        match CaptureSource::connect_at("omarchy", qmp(), dead_display, 85, 1280, 800).await {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("SKIPPED: no guest on QMP 4444: {e}");
+                return;
+            }
+        };
 
-    // Whatever path was chosen, input must work -- that is the invariant
-    // CaptureSource exists to hold. `QmpClient` exposes its endpoint rather
-    // than a connected flag, because the handshake already happened inside
-    // `connect`; reaching this line at all *is* the proof that input works.
+    // The branch must actually have been taken. Without this the test would
+    // pass while exercising VNC, which is the mistake it used to make.
+    assert_eq!(
+        source.name(),
+        "qmp",
+        "a closed RFB endpoint must select the QMP fallback, and the reason \
+         must be reported rather than swallowed"
+    );
+    let reason = reason.expect("fallback must explain itself so a log can say why");
+    assert!(
+        reason.contains(&dead_display.port().to_string()),
+        "fallback reason {reason:?} should name the RFB endpoint it tried"
+    );
+
+    // A source that reports itself as QMP but returns no pixels is not a
+    // fallback, it is an outage. This is what actually makes the path real.
+    let frame = source
+        .capture_jpeg()
+        .await
+        .expect("the QMP fallback must deliver a frame");
+    assert_eq!((frame.width, frame.height), (1280, 800));
+    assert!(
+        frame.jpeg.len() > 1000,
+        "fallback frame is implausibly small: {} bytes",
+        frame.jpeg.len()
+    );
+
+    // Input must be available over QMP regardless of which video path was
+    // chosen -- that is the invariant `CaptureSource` exists to hold. Reaching
+    // this line at all *is* the proof the handshake happened inside `connect`.
     assert_eq!(
         source.client().addr().port(),
         4444,
         "input must be available over QMP regardless of which video path was chosen"
     );
     eprintln!(
-        "OK: source={} with a working QMP input path",
-        source.name()
+        "OK: forced fallback to {} delivered a {}x{} JPEG ({} bytes); reason: {reason}",
+        source.name(),
+        frame.width,
+        frame.height,
+        frame.jpeg.len()
     );
 }

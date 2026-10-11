@@ -62,7 +62,6 @@ use serde::{Deserialize, Serialize};
 
 use continuum_core::input::RemoteInputEvent;
 
-use crate::capture_qmp::QmpCaptureBackend;
 use crate::capture_source::CaptureSource;
 use crate::input_qmp::QmpInputInjector;
 

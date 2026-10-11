@@ -33,7 +33,7 @@
 
 use std::collections::BTreeMap;
 
-use continuum_transport::rfb::encoder::{hextile, full_frame, ChangedRegion, Framebuffer};
+use continuum_transport::rfb::encoder::{hextile, ChangedRegion, Framebuffer};
 use continuum_transport::rfb::PixelFormat as ContinuumPf;
 use rfb_proto::PixelFormat as AuroraPf;
 use sha2::{Digest, Sha256};

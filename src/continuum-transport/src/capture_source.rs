@@ -106,17 +106,43 @@ impl CaptureSource {
         width: u32,
         height: u32,
     ) -> ContinuumResult<(Self, Option<String>)> {
+        Self::connect_at(
+            vm_name,
+            qmp_addr,
+            VncCaptureBackend::addr_for_display(VNC_DISPLAY),
+            quality,
+            width,
+            height,
+        )
+        .await
+    }
+
+    /// Connect with an explicit RFB endpoint.
+    ///
+    /// The RFB address is a parameter rather than a constant because the
+    /// fallback is otherwise untestable. Pointing it at a closed port is the
+    /// only way to assert "RFB is unavailable, so this VM is on the QMP path",
+    /// and without that the fallback was only ever exercised by whatever
+    /// display happened to be running -- so a green suite said nothing about
+    /// whether fallback works at all.
+    pub async fn connect_at(
+        vm_name: &str,
+        qmp_addr: std::net::SocketAddr,
+        rfb_addr: std::net::SocketAddr,
+        quality: u8,
+        width: u32,
+        height: u32,
+    ) -> ContinuumResult<(Self, Option<String>)> {
         let input = Arc::new(
             QmpCaptureBackend::connect(vm_name, qmp_addr)
                 .await?
                 .with_format(quality, width, height),
         );
-        let addr = VncCaptureBackend::addr_for_display(VNC_DISPLAY);
-        match VncCaptureBackend::connect(vm_name, addr, quality, width, height) {
+        match VncCaptureBackend::connect(vm_name, rfb_addr, quality, width, height) {
             Ok(vnc) => Ok((Self { input, video: VideoSource::Vnc(vnc) }, None)),
             Err(e) => Ok((
                 Self { input, video: VideoSource::Qmp },
-                Some(fallback_reason(vm_name, &addr, &e.to_string())),
+                Some(fallback_reason(vm_name, &rfb_addr, &e.to_string())),
             )),
         }
     }
@@ -283,6 +309,7 @@ fn fallback_reason(vm_name: &str, vnc_addr: &std::net::SocketAddr, cause: &str) 
 mod tests {
     use super::*;
 
+    #[test]
     fn the_fallback_reason_names_what_was_tried() {
         // This used to be an end-to-end test against a refused port, which is
         // wrong twice over: it depends on nothing listening on the real VNC
