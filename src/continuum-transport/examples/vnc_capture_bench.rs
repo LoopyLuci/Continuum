@@ -24,6 +24,30 @@
 // small rectangle, which flatters RFB -- so pointer motion is swept across the
 // screen while frames are counted.
 
+// # Measured results
+//
+// Against the live Omarchy guest (Hyprland on Wayland, 1280x800), with the
+// pointer swept continuously so the framebuffer genuinely changes:
+//
+//   RFB   21-22 frames / 10s = 2.1-2.2 fps, 156-164 KiB/s, first frame ~0 ms
+//   QMP    9 frames / 10s    = 0.9 fps,     67 KiB/s, first frame 1.1-1.3 s
+//
+// Reproducible across runs. So RFB delivers roughly 2.3x the frame rate and
+// removes about 1.2 seconds of first-frame latency -- QMP pays a socket round
+// trip plus a full-framebuffer encode by QEMU on every single frame, while
+// RFB's cost is the guest's own damage handling.
+//
+// It also moves *more* bandwidth, which is the part worth understanding rather
+// than hiding: the transport is damage-only, but `VncCaptureBackend` re-encodes
+// the entire framebuffer to JPEG for each update it receives. The saving from
+// damage-only transport is therefore given straight back at the encode step.
+// Making this genuinely cheap means encoding only the changed region, which is
+// a larger change than a benchmark and is not done yet.
+//
+// For scale: 2 fps is not a smooth desktop. This is a software-rendered WHPX
+// host with no GPU passthrough, so it is evidence that the RFB path is the
+// better of the two available, not that it is fast.
+
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -191,10 +215,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 bytes.fetch_add(frame.data.len() as u64, Ordering::Relaxed);
             }
         }
-        stats.report("RFB (damage-only)");
+        stats.report("RFB (damage transport, full-frame re-encode)");
         println!(
             "  (this path only counts frames the guest actually sent; an idle \
-             desktop correctly produces none)"
+             desktop correctly produces none. Note that RFB's *transport* is \
+             damage-only, but this backend re-encodes the whole framebuffer to \
+             JPEG on every update, so its bandwidth is higher than QMP's \
+             despite moving fewer bytes off the guest.)"
         );
         stop.store(true, Ordering::Relaxed);
         anim.abort();

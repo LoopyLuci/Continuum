@@ -661,6 +661,35 @@ async fn handle_client(
         peer,
     ));
 
+    // Seed the client from the current frame at subscribe time, and queue a
+    // full-screen request so the next captured frame is actually sent.
+    //
+    // Doing this only when the client *asks* leaves a hole: a client whose
+    // FramebufferUpdateRequest arrives before the first capture completes, and
+    // which subscribes after that frame was published, is sent nothing. It will
+    // not ask again either -- a client only re-requests after receiving an
+    // update, so it waits for ever on a server that is perfectly healthy.
+    // That is a real race, not a theoretical one: it showed up as an
+    // intermittent "server never sent a framebuffer update" in the full suite
+    // while passing when the test ran alone.
+    //
+    // Requesting here as well means either route delivers a frame: the queued
+    // request if one arrives, or the broadcast if it does not.
+    if let Some(frame) = shared.latest.lock().ok().and_then(|slot| slot.clone()) {
+        if state.view.width() != frame.width() || state.view.height() != frame.height() {
+            state.view.resize(frame.width(), frame.height());
+        }
+        state.view.copy_from(&frame);
+        state.needs_full_refresh.store(true, Ordering::Release);
+        state.seeded = true;
+        state.pending = Some(PendingRequest {
+            x: 0,
+            y: 0,
+            width: state.view.width(),
+            height: state.view.height(),
+        });
+    }
+
     let result = session_loop(
         &mut state,
         &out_tx,
